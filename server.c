@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
-
+//cheese
 char sendBuff[1024];
 char recvBuff[1024];
 int player_count = 0; // note to self: mutex/semaphore this
