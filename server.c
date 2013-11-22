@@ -10,7 +10,8 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
-//cheese
+#include <signal.h>
+
 char sendBuff[1024];
 char recvBuff[1024];
 int player_count = 0; // note to self: mutex/semaphore this
@@ -18,6 +19,19 @@ int player_count = 0; // note to self: mutex/semaphore this
 
 #define MAX_PLAYERS 10
 const char quit_signal = 'q';
+
+void handle_sigpipe(int signal) {
+  printf("%s", "Sigpipe\n");
+}
+
+void init_signals(void) {
+  // use sigaction(2) to catch SIGPIPE somehow
+  struct sigaction sigpipe;
+  memset(&sigpipe, 0, sizeof(sigpipe));
+  sigpipe.sa_handler = &handle_sigpipe;
+  sigaction(SIGPIPE, &sigpipe, NULL);
+  return;
+}
 
 void *client_thread(void *arg)
 {
@@ -52,7 +66,9 @@ int main(int argc, char *argv[])
   }
   
   int listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  
+
+  init_signals();  
+
   struct sockaddr_in serv_addr;
   memset(&serv_addr, '0', sizeof serv_addr);
   memset(sendBuff, '0', sizeof sendBuff);
