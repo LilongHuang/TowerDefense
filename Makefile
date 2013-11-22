@@ -5,17 +5,19 @@ server:server.c
 	chmod 770 serve
 
 play:client.c
-	c99 -Wall -D_GNU_SOURCE -o play client.c -lncurses
+	c99 -Wall -D_GNU_SOURCE -o play client.c
 	chmod 770 play
-
-curses:curses.c
-	c99 -Wall -o curses curses.c -lncurses
-	chmod 770 curses
 
 cursesColors:cursesColors.c
 	c99 -Wall -o cursesColors cursesColors.c -lncurses
 	chmod 770 cursesColors
 
 map:map.c
-	c99 -Wall -o map map.c
-	chmod 770 map
+	c99 -c map.c
+	chmod 770 map.o
+	chmod 770 map.c
+
+curses:curses.c map.o
+	c99 -Wall -o curses curses.c map.o -lncurses
+	chmod 770 curses
+

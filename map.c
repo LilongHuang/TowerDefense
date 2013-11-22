@@ -4,10 +4,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#define _POSIX_SOURCE
 #include <string.h>
+#include <ncurses.h>
 
-char buffer[8 * 1024];
+char buffer[1024];
 char mapName[1024];
 char authorName[1024];
 char castleStrength[1024];
@@ -24,6 +24,10 @@ char castle[1024];
 char attacker[1024];
 char defender[1024];
 
+char* getMap() {
+	return map;
+}
+
 char* getMapName() {
 	return mapName;
 }
@@ -32,96 +36,122 @@ char* getAuthor() {
 	return authorName;
 }
 
-char* getCastleStrength() {
+int getCastleStrength() {
 	char* subBuffer = strstr(castle, "strength");
 	subBuffer += 9;
 	char* subBuffer2 = strstr(castle, "touch");
 	int diffBytes = subBuffer2 - subBuffer;
 	
 	strncpy(castleStrength, subBuffer, diffBytes - 1);
-	return castleStrength;
+	int value = atoi(castleStrength);
+	return value;
 }
 
-char* getCastleTouch() {
+int getCastleTouch() {
 	char* subBuffer = strstr(castle, "touch");
         subBuffer += 6;
 
-	strncpy(castleTouch, subBuffer, strlen(subBuffer));
-        return castleTouch;
+	strncpy(castleTouch, subBuffer, strlen(subBuffer) - 1);
+	int value = atoi(castleTouch);
+        return value;
 }
 
-char* getAttackerWin() {
+int getAttackerWin() {
         char* subBuffer = strstr(attacker, "destroy");
         subBuffer += 8;
 	char* subBuffer2 = strstr(attacker, "shots");
         int diffBytes = subBuffer2 - subBuffer;
 
-	strncpy(attackerWin, subBuffer, diffBytes - 1);
-        return attackerWin;
+	strncpy(attackerWin, subBuffer, diffBytes - 2);
+	int value = atoi(attackerWin);
+        return value;
 }
 
-char* getAttackerShots() {
+int getAttackerShots() {
         char* subBuffer = strstr(attacker, "shot");
         subBuffer += 6;
 	char* subBuffer2 = strstr(attacker, "respawn");
         int diffBytes = subBuffer2 - subBuffer;
 
 	strncpy(attackerShots, subBuffer, diffBytes - 1);
-        return attackerShots;
+	int value = atoi(attackerShots);
+        return value;
 }
 
-char* getAttackerRespawn() {
+int getAttackerRespawn() {
         char* subBuffer = strstr(attacker, "respawn");
         subBuffer += 8;
 
-	strncpy(attackerRespawn, subBuffer, strlen(subBuffer));
-        return attackerRespawn;
+	strncpy(attackerRespawn, subBuffer, strlen(subBuffer) - 1);
+	int value = atoi(attackerRespawn);
+        return value;
 }
 
-char* getDefenderWin() {
+int getDefenderWin() {
         char* subBuffer = strstr(defender, "survive");
         subBuffer += 8;
 	char* subBuffer2 = strstr(defender, "shot");
         int diffBytes = subBuffer2 - subBuffer;
 
-	strncpy(defenderWin, subBuffer, diffBytes - 1);
-        return defenderWin;
+	strncpy(defenderWin, subBuffer, diffBytes - 2);
+	int value = atoi(defenderWin);
+        return value;
 }
 
-char* getDefenderShots() {
+int getDefenderShots() {
         char* subBuffer = strstr(defender, "shot");
         subBuffer += 6;
 	char* subBuffer2 = strstr(defender, "respawn");
         int diffBytes = subBuffer2 - subBuffer;
 
 	strncpy(defenderShots, subBuffer, diffBytes - 1);
-        return defenderShots;
+	int value = atoi(defenderShots);
+        return value;
 }
 
-char* getDefenderRespawn() {
+int getDefenderRespawn() {
         char* subBuffer = strstr(defender, "respawn");
         subBuffer += 8;
 
-	strncpy(defenderRespawn, subBuffer, strlen(subBuffer));
-        return defenderRespawn;
+	strncpy(defenderRespawn, subBuffer, strlen(subBuffer) - 1);
+	int value = atoi(defenderRespawn);
+        return value;
+}
+
+char *replace_str(char *str, char *orig, char *rep) {
+  	static char buffer[4096];
+  	char *p;
+
+  	if(!(p = strstr(str, orig)))  // Is 'orig' even in 'str'?
+    	return str;
+
+  	strncpy(buffer, str, p-str); // Copy characters from 'str' start to 'orig' st$
+  	buffer[p-str] = '\0';
+
+  	sprintf(buffer+(p-str), "%s%s", rep, p+strlen(orig));
+
+  	return buffer;
 }
 
 
-int main(int argc, char *argv[]) {
+
+void loadMap(int argc, char *argv[]) {
 	
 	
 	if (argc != 2) {
 		fprintf(stderr, "Syntax:  %s filename\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	
+		
 	FILE *file;
 	file = fopen(argv[1], "r");
 
-	if (file == NULL) perror ("Error opening file");
-	else {
+	if (file == NULL) {
+		perror ("Error opening file");
+		exit(EXIT_FAILURE);
+	} else {
 		int i = 0;
-		while (fgets(buffer, 8 * 1024, file) != NULL && i < 6) {
+		while (fgets(buffer, 1024, file) != NULL) {
 			if (i == 0) {
 				strncpy(mapName, buffer, strlen(buffer)-1);
 			} else if (i == 1) {
@@ -132,12 +162,61 @@ int main(int argc, char *argv[]) {
                                 strncpy(attacker, buffer, strlen(buffer)-1);
                         } else if (i == 4) {
 				strncpy(defender, buffer, strlen(buffer)-1);
+			} else if (i >= 7) {				
+				strncpy(map, buffer, sizeof buffer);
+				char* temp = &map[2];
+				char* temp2 = replace_str(temp, "%", "%%");
+				mvprintw(i - 6, 0, temp2);
+				
+				//fprintf(stdout, "%s", getMap());
 			}
 			i++;
+			if (i > 27) break;
 		}
 		fclose(file);
 	};
-	
-	return 1;
 
+	init_pair(1, COLOR_BLACK, COLOR_GREEN);
+  	init_pair(2, COLOR_BLACK, COLOR_RED);
+  	init_pair(3, COLOR_BLACK, COLOR_BLUE);
+  	init_pair(4, COLOR_BLACK, COLOR_WHITE);
+  	init_pair(5, COLOR_BLACK, COLOR_CYAN);
+	
+	attron(COLOR_PAIR(5));
+
+	int i = 0;
+	for (i = 0; i < 80; i++) {
+		mvprintw(0, i, " ");
+	}
+
+	char* map = "map: ";
+  	char* author = "author: ";
+  	mvprintw(0, 0, map);
+ 	mvprintw(0, strlen(map), getMapName());
+  	mvprintw(0, strlen(map) + strlen(getMapName()) + 2, author);
+  	mvprintw(0, strlen(map) + strlen(getMapName()) + strlen(author) + 1
+                        , getAuthor());
+
+
+	/*	
+	fprintf(stdout, "%s\n", getMapName());
+	fprintf(stdout, "%s\n", getAuthor());
+	fprintf(stdout, "%d", getCastleStrength());
+	printf("\n");
+	fprintf(stdout, "%d", getCastleTouch());
+	printf("\n");
+	
+	fprintf(stdout, "%d", getAttackerWin());
+	printf("\n");
+	fprintf(stdout, "%d", getAttackerShots());
+        printf("\n");
+	fprintf(stdout, "%d", getAttackerRespawn());
+        printf("\n");
+	fprintf(stdout, "%d", getDefenderWin());
+        printf("\n");
+	fprintf(stdout, "%d", getDefenderShots());
+        printf("\n");
+	fprintf(stdout, "%d", getDefenderRespawn());
+        printf("\n");
+	*/
 }
