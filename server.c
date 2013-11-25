@@ -169,8 +169,8 @@ void *client_thread(void *arg)
     if(sec_counter > 0){
       //sends each client the newly updated player list
       char send[1024];
-      //snprintf(send, sizeof send, "%s %s %d", a_team, b_team, sec_counter);
-      snprintf(send, sizeof send, "%d", sec_counter);
+      snprintf(send, sizeof send, "%s %s %d", a_team, b_team, sec_counter);
+      //snprintf(send, sizeof send, "%s %d", send, sec_counter);
 
       write(connfd, send, strlen(send)+1);
       sleep(1);
@@ -220,8 +220,8 @@ int main(int argc, char *argv[])
   memset(sendBuff, '0', sizeof sendBuff);
   memset(recvBuff, '0', sizeof recvBuff);
 
-  memset(a_team, '0', sizeof a_team);
-  memset(b_team, '0', sizeof b_team);
+  //memset(a_team, '0', sizeof a_team);
+  //memset(b_team, '0', sizeof b_team);
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
