@@ -44,6 +44,8 @@ struct player_t player_list[10];
 
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+char mapName[1024];
+
 void init_player(struct player_t *p){
   pthread_mutex_init( &(p->player_mutex), NULL);
   p -> team = UNASSIGNED;
@@ -187,7 +189,9 @@ void *client_thread(void *arg)
     }
     else if(sec_counter == 0){
       char *game_started = "Game is starting!";
-      write(connfd, game_started, strlen(game_started)+1);
+      char gameStartAndMapName[1024];
+      scanf(gameStartAndMapName, "%s %s", game_started, mapName);
+      write(connfd, gameStartAndMapName, strlen(gameStartAndMapName)+1);
     }
     else{
       if ((n = read(connfd, recvBuff, sizeof recvBuff)) != 0)
@@ -208,7 +212,7 @@ void *client_thread(void *arg)
 }
 
 void *loading_thread(void *arg){
-  for(int i = 30; i >= 0; i--){
+  for(int i = 3; i >= 0; i--){
     sec_counter = i;
     sleep(1);
   }
@@ -223,6 +227,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  strncpy(mapName, argv[1], strlen(argv[1]) + 1);
+  
   init_signals();
   int listenfd = socket(AF_INET, SOCK_STREAM, 0);
   

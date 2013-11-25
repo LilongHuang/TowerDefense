@@ -18,6 +18,8 @@ char recvBuff[1024];
 char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
 
+char* mapName[1024];
+
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
   return write(sockfd, sendBuff, strlen(sendBuff)+1);
@@ -56,8 +58,13 @@ void loading_screen(){
       /*char sec_left[10];
       char teamA[1024];
       char teamB[1024];*/
-
+      char* gisFromServer = " ";
+      char* gameStart = "Game is starting!";
       mvprintw(30, 40, recvBuff);
+      sscanf(recvBuff, "%s %s", gisFromServer, mapName[0]);
+      if (strcmp(gisFromServer, gameStart) == 0) {
+	break;
+      }
     }
 
     //FIX-ME
@@ -66,7 +73,11 @@ void loading_screen(){
     refresh();/* Print it on to the real screen */
     //getch();/* Wait for user input */
   }
-  endwin();/* End curses mode  */
+}
+
+void gameStart_screen() {
+  start_color();
+    
 }
 
 int server_connect(char* port)
@@ -203,7 +214,8 @@ int main(int argc, char *argv[])
   //need to add loop to refresh loading screen for T-Minus 30 seconds
   //for when new users are joining the game
   loading_screen();
-
+  gameStart_screen();
+  endwin();
   close(sockfd);
   return 0;
 }

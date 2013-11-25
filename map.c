@@ -135,14 +135,8 @@ char *replace_str(char *str, char *orig, char *rep) {
 
 
 
-void loadMap(int argc, char *argv[]) {
+void loadMap(char *argv[]) {
 	
-	
-	if (argc != 2) {
-		fprintf(stderr, "Syntax:  %s filename\n", argv[0]);
-		exit(EXIT_FAILURE);
-	}
-		
 	FILE *file;
 	file = fopen(argv[1], "r");
 
