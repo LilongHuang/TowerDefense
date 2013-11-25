@@ -10,15 +10,64 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <time.h>
-#include <poll.h>
-#include <curses.h>
-#include <ctype.h>
+#include <ncurses.h>
 
 int team = -1; // team: either 1 or 2 once assigned
 char* name = NULL;
 char recvBuff[1024];
 char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
+
+// Sends whatever string's in sendBuff to the server.
+int send_to_server() {
+  return write(sockfd, sendBuff, strlen(sendBuff)+1);
+}
+
+// Sends arbitrary already-constructed string to server.
+int send_str_to_server(char* str) {
+  return write(sockfd, str, sizeof(char) * (strlen(str)+1));
+}
+
+// Reads from the server and dumps whatever it gets into recvBuff.
+// Blocks until the server says something!
+int read_from_server() {
+  return read(sockfd, recvBuff, sizeof(recvBuff)-1);
+}
+
+void loading_screen(){
+  initscr();/* Start curses mode   */
+
+  for(int i = 0;i < 20;i++){
+    mvprintw(i, 0, "|");
+    mvprintw(i, 40, "|");
+    mvprintw(i, 80, "|");
+  }
+
+  for(int i = 0;i < 81;i++){
+    mvprintw(0, i, "*");
+    mvprintw(20, i, "-");
+  }
+
+  mvprintw(2, 17, "Team A");
+  mvprintw(2, 57, "Team B");
+
+  while(1){
+    if(read_from_server() != 0){
+      /*char sec_left[10];
+      char teamA[1024];
+      char teamB[1024];*/
+
+      mvprintw(30, 40, recvBuff);
+    }
+
+    //FIX-ME
+    //need to add which players belong to which team here
+
+    refresh();/* Print it on to the real screen */
+    //getch();/* Wait for user input */
+  }
+  endwin();/* End curses mode  */
+}
 
 int server_connect(char* port)
 {
@@ -100,74 +149,6 @@ void read_socket()
   }
 }
 
-
-// Sends whatever string's in sendBuff to the server.
-int send_to_server() {
-  return write(sockfd, sendBuff, strlen(sendBuff)+1);
-}
-
-// Sends arbitrary already-constructed string to server.
-int send_str_to_server(char* str) {
-  return write(sockfd, str, sizeof(char) * (strlen(str)+1));
-}
-
-// Reads from the server and dumps whatever it gets into recvBuff.
-// Blocks until the server says something!
-int read_from_server() {
-  return read(sockfd, recvBuff, sizeof(recvBuff)-1);
-}
-
-void control_test() {
-  initscr();                 // initialize curses
-
-  scrollok(stdscr, 1);       // allow the window to scroll
-  noecho();                  // don't echo characters
-  cbreak();                  // give me characters immediately
-  refresh();                 // update the screen
-  struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
-  while (1) {
-    switch (poll(pfds, 2, -1)) {
-      
-      case -1:
-        perror("poll");
-        exit(EXIT_FAILURE);
-        
-      default:
-        if ((pfds[0].revents & POLLIN) != 0) {
-          // client
-          int c = getch();
-          if (c == 81 || c == 113) {
-            printw("Exiting.\n");
-            return;
-          }
-          else if (iscntrl(c))
-            printw("Client pressed '^%c'.\n", c + 64);
-          else
-            printw("Client pressed '%c'.\n", c);
-            sendBuff[0] = c;
-            sendBuff[1] = '\0';
-            send_to_server();
-          refresh();
-        }
-        if ((pfds[1].revents & POLLIN) != 0) {
-          // server
-          int c;
-          ssize_t size = read(sockfd, &c, 1);
-          if (size > 0) {
-	    if ((c & 0xFF) != 0) {
-              printw("Server pressed '%c'.\n", c);
-	    }
-          }
-          else {
-            printw("[Server closed connection.]\n");
-            return;
-          }
-        refresh();
-        }
-    }
-  }
-}
-
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -184,31 +165,45 @@ int main(int argc, char *argv[])
   parse_settings(argv[2], argv[3]);
 
   printf("Request name %s and team %d\n", name, team);
-  
-  int readbytes = read_from_server();
-  printf("Bytes read: %d.\n%s\n", readbytes, recvBuff);
-  
-  // example: send sendBuff contents to server
-  // construct test value in sendBuff
-  time_t ticks = time(NULL);
-  snprintf(sendBuff, sizeof sendBuff, "%.24s", ctime(&ticks));
+
+  //construct proper sendBuff
+  //(name, team)
+  snprintf(sendBuff, sizeof sendBuff, "%s %d", name, team);
+
   // send it
   int writtenbytes = send_to_server();
   // read reply
-  readbytes = read_from_server();
-  printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
-  
+  int readbytes = read_from_server();
+
+  //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
+  printf("%s\n", recvBuff);
+  char *ghs = "Game has already started";
+  if(strcmp(ghs, recvBuff) == 0){
+    close(sockfd);
+    return 0;
+  }
+
+  /*char newName[10];
+  char newTeam[10];
+  char teamCount[10];
+  sscanf(recvBuff, "%s %s %s", newName, newTeam, teamCount);
+  printf("%s %s %s\n", newName, newTeam, teamCount);*/
+
+  //printf("%s", recvBuff);
+
   // example: send preconstructed string to server
-  char* arbitrary_test_value = "This was a triumph.";
+  //char* arbitrary_test_value = "This was a triumph.";
   // send it
-  writtenbytes = send_str_to_server(arbitrary_test_value);
+  //writtenbytes = send_str_to_server(arbitrary_test_value);
   // read reply
-  readbytes = read_from_server();
-  printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
-  
-  control_test();
-  
-  endwin();
+  //readbytes = read_from_server();
+  //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
+
+  //FIX-ME
+  //need to add loop to refresh loading screen for T-Minus 30 seconds
+  //for when new users are joining the game
+  loading_screen();
+
   close(sockfd);
   return 0;
 }
