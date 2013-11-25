@@ -10,6 +10,9 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <poll.h>
+#include <curses.h>
+#include <ctype.h>
 
 int team = -1; // team: either 1 or 2 once assigned
 char* name = NULL;
@@ -114,6 +117,57 @@ int read_from_server() {
   return read(sockfd, recvBuff, sizeof(recvBuff)-1);
 }
 
+void control_test() {
+  initscr();                 // initialize curses
+
+  scrollok(stdscr, 1);       // allow the window to scroll
+  noecho();                  // don't echo characters
+  cbreak();                  // give me characters immediately
+  refresh();                 // update the screen
+  struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
+  while (1) {
+    switch (poll(pfds, 2, -1)) {
+      
+      case -1:
+        perror("poll");
+        exit(EXIT_FAILURE);
+        
+      default:
+        if ((pfds[0].revents & POLLIN) != 0) {
+          // client
+          int c = getch();
+          if (c == 81 || c == 113) {
+            printw("Exiting.\n");
+            return;
+          }
+          else if (iscntrl(c))
+            printw("Client pressed '^%c'.\n", c + 64);
+          else
+            printw("Client pressed '%c'.\n", c);
+            sendBuff[0] = c;
+            sendBuff[1] = '\0';
+            send_to_server();
+          refresh();
+        }
+        if ((pfds[1].revents & POLLIN) != 0) {
+          // server
+          int c;
+          ssize_t size = read(sockfd, &c, 1);
+          if (size > 0) {
+	    if ((c & 0xFF) != 0) {
+              printw("Server pressed '%c'.\n", c);
+	    }
+          }
+          else {
+            printw("[Server closed connection.]\n");
+            return;
+          }
+        refresh();
+        }
+    }
+  }
+}
+
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -131,6 +185,9 @@ int main(int argc, char *argv[])
 
   printf("Request name %s and team %d\n", name, team);
   
+  int readbytes = read_from_server();
+  printf("Bytes read: %d.\n%s\n", readbytes, recvBuff);
+  
   // example: send sendBuff contents to server
   // construct test value in sendBuff
   time_t ticks = time(NULL);
@@ -138,7 +195,7 @@ int main(int argc, char *argv[])
   // send it
   int writtenbytes = send_to_server();
   // read reply
-  int readbytes = read_from_server();
+  readbytes = read_from_server();
   printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
   
   // example: send preconstructed string to server
@@ -149,6 +206,9 @@ int main(int argc, char *argv[])
   readbytes = read_from_server();
   printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
   
+  control_test();
+  
+  endwin();
   close(sockfd);
   return 0;
 }

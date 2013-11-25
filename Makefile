@@ -5,7 +5,7 @@ server:server.c
 	chmod 770 serve
 
 play:client.c
-	c99 -Wall -D_GNU_SOURCE -o play client.c
+	c99 -Wall -D_GNU_SOURCE -o play client.c -lncurses
 	chmod 770 play
 
 cursesColors:cursesColors.c
