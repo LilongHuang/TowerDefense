@@ -14,7 +14,7 @@
 #include <signal.h>
 
 #define max_players 10
-#define TIMER_START 3
+#define TIMER_START 30
 #define EVENT_QUEUE_SIZE 20
 
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
@@ -73,17 +73,15 @@ void init_player(struct player_t *p){
 }
 
 int balance_names(char *name){
-  //srand(123);
   for(int i = 0; i < team_A_counter + team_B_counter; i++){
     struct player_t temp_player = player_list[i];
-    printf("%s, %s\n", name, temp_player.name);
+
     if(strcmp(name, temp_player.name) == 0){
-      //int rn = rand();
-      //char rn_string[128];
-      //sprintf(rn_string, "%d", rn);
-      //strcpy(name, rn_string);
-      strcat(name, "1");
-      printf("%s\n", name);
+      int rn = rand()%9000%1000;
+      char rn_string[128];
+      sprintf(rn_string, "%d", rn);
+      strcat(name, rn_string);
+
       return 0;
     }
   }

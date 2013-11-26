@@ -59,6 +59,10 @@ void loading_screen(){
   }
 }
 
+void load_players(){
+
+}
+
 void control_test() {
   scrollok(stdscr, 1);       // allow the window to scroll
   noecho();                  // don't echo characters
@@ -283,6 +287,7 @@ int main(int argc, char *argv[])
   loadMap(mapNameFromServer);
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
+  load_players();
   getch();/* Wait for user input */
   endwin();
   close(sockfd);
