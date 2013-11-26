@@ -1,3 +1,4 @@
+#include "map.h"
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -11,6 +12,8 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <ncurses.h>
+#include <poll.h>
+#include <ctype.h>
 
 int team = -1; // team: either 1 or 2 once assigned
 char* name = NULL;
@@ -18,6 +21,8 @@ char recvName[10];
 char recvBuff[1024];
 char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
+
+char mapNameFromServer[1024];
 
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
@@ -36,25 +41,73 @@ int read_from_server() {
 }
 
 void loading_screen(){
-  initscr();/* Start curses mode   */
   int stop_loading_screen = 1;
   mvprintw(0, 0, recvName);//printing name revieved from server after balancing names
   mvprintw(1, 0, "Count Down:");
 
   while(stop_loading_screen){
+    char gisFromServer[1024];
+    char* gameStart = "GameIsStarting!";
     if(read_from_server() != 0){
-      if(strcmp(recvBuff, "Game is starting!") == 0)
-	stop_loading_screen = 0;
-      char sec_left[10];
-      sscanf(recvBuff, "%s", sec_left);
-      mvprintw(1, 12, sec_left);
+      sscanf(recvBuff, "%s %s", gisFromServer, mapNameFromServer);
+      mvprintw(1, 12, recvBuff);
+      if (strcmp(gisFromServer, gameStart) == 0) {
+        stop_loading_screen = 0;
+      }
      }
-
     refresh();/* Print it on to the real screen */
   }
-  mvprintw(2, 0, recvBuff);
-  endwin();/* End curses mode  */
 }
+
+void control_test() {
+  scrollok(stdscr, 1);       // allow the window to scroll
+  noecho();                  // don't echo characters
+  cbreak();                  // give me characters immediately
+  refresh();                 // update the screen
+  struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
+  while (1) {
+    switch (poll(pfds, 2, -1)) {
+
+      case -1:
+        perror("poll");
+        exit(EXIT_FAILURE);
+
+      default:
+        if ((pfds[0].revents & POLLIN) != 0) {
+          // client
+          int c = getch();
+          if (c == 81 || c == 113) {
+            printw("Exiting.\n");
+            return;
+          }
+          else if (iscntrl(c))
+            printw("Client pressed '^%c'.\n", c + 64);
+          else
+            printw("Client pressed '%c'.\n", c);
+            sendBuff[0] = c;
+            sendBuff[1] = '\0';
+            send_to_server();
+          refresh();
+        }
+        if ((pfds[1].revents & POLLIN) != 0) {
+          // server
+          int c;
+          ssize_t size = read(sockfd, &c, 1);
+          if (size > 0) {
+            if ((c & 0xFF) != 0) {
+              printw("Server pressed '%c'.\n", c);
+            }
+          }
+          else {
+            printw("[Server closed connection.]\n");
+            return;
+          }
+        refresh();
+        }
+    }
+  }
+}
+
 
 int server_connect(char* port)
 {
@@ -136,6 +189,39 @@ void read_socket()
   }
 }
 
+void initBoard(){
+  init_pair(1, COLOR_BLACK, COLOR_GREEN);
+  init_pair(2, COLOR_BLACK, COLOR_RED);
+  init_pair(3, COLOR_BLACK, COLOR_BLUE);
+  init_pair(4, COLOR_BLACK, COLOR_WHITE);
+  init_pair(5, COLOR_BLACK, COLOR_CYAN);
+
+  //background team A (red)
+  for(int i = 70; i < 80; i++){
+    for(int j = 1; j <= 10; j++){
+      attron(COLOR_PAIR(2));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //background team B (blue)
+  for(int i = 70; i < 80; i++){
+    for(int j = 11; j <= 20; j++){
+      attron(COLOR_PAIR(3));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //description area (scrollable)
+  for(int i = 0; i < 80; i++){
+    for(int j = 21; j < 24; j++){
+      attron(COLOR_PAIR(4));
+      mvprintw(j, i, " ");
+    }
+  }
+
+}
+
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -191,8 +277,14 @@ int main(int argc, char *argv[])
   //FIX-ME
   //need to add loop to refresh loading screen for T-Minus 30 seconds
   //for when new users are joining the game
+  initscr();
   loading_screen();
-
+  start_color();
+  loadMap(mapNameFromServer);
+  initBoard();/* creates play board */
+  refresh();/* Print it on to the real screen */
+  getch();/* Wait for user input */
+  endwin();
   close(sockfd);
   return 0;
 }

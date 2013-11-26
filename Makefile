@@ -1,12 +1,4 @@
-all: server play curses cursesColors map
-
-server:server.c
-	c99 -Wall -pthread -D_GNU_SOURCE -o serve server.c
-	chmod 770 serve
-
-play:client.c
-	c99 -Wall -D_GNU_SOURCE -o play client.c -lncurses
-	chmod 770 play
+all: cursesColors map curses server play
 
 cursesColors:cursesColors.c
 	c99 -Wall -o cursesColors cursesColors.c -lncurses
@@ -19,5 +11,12 @@ map:map.c
 
 curses:curses.c map.o
 	c99 -Wall -o curses curses.c map.o -lncurses
-	chmod 770 curses
+	chmod 770 curses.c
 
+server:server.c
+	c99 -Wall -pthread -D_GNU_SOURCE -o serve server.c
+	chmod 770 serve
+
+play:client.c map.o
+	c99 -Wall -D_GNU_SOURCE -o play client.c map.o -lncurses
+	chmod 770 play
