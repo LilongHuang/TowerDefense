@@ -56,7 +56,7 @@ void loading_screen(){
       /*char sec_left[10];
       char teamA[1024];
       char teamB[1024];*/
-
+      
       mvprintw(30, 40, recvBuff);
     }
 

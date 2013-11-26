@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
-#include <signal.h>
 #include <semaphore.h>
 
 #define max_players 10
@@ -30,8 +29,8 @@ struct player_t
 int team_A_counter = 0;
 int team_B_counter = 0;
 
-char a_team[1024];
-char b_team[1024];
+char a_team[512];
+char b_team[512];
 
 char sendBuff[1024];
 char recvBuff[1024];
@@ -50,47 +49,52 @@ void init_player(struct player_t *p){
   p -> fd = -1;
 }
 
-void update_a_team(char name){
-  strcat(a_team, &name);
-}
-
-void update_b_team(char name){
-  strcat(b_team, &name);
-}
-
-//not in use, found a better way
-//keeping it for code reusability
-/*void update_teams(int connfd){
-  pthread_mutex_lock(&team_array_mutex);
-  char teamA[1024];
-  char teamB[1024];
-  //int a_counter = 0;
-  //int b_counter = 0;
+int balance_names(char *name){
+  //srand(123);
   for(int i = 0; i < team_A_counter + team_B_counter; i++){
     struct player_t temp_player = player_list[i];
-    if(temp_player.team == TEAM_A){
-      //teamA[a_counter] = temp_player.name;
-      strcat(teamA, temp_player.name);
-      //strcat(teamA, " ");
-    }
-    else{
-      //teamB[b_counter] = temp_player.name;
-      strcat(teamB, temp_player.name);
-      //strcat(teamB, " ");
+    printf("%s, %s\n", name, temp_player.name);
+    if(strcmp(name, temp_player.name) == 0){
+      //int rn = rand();
+      //char rn_string[128];
+      //sprintf(rn_string, "%d", rn);
+      //strcpy(name, rn_string);
+      strcat(name, "1");
+      printf("%s\n", name);
+      return 0;
     }
   }
+  return 1;
+}
 
-  snprintf(current_teams, sizeof current_teams, "%s, %s", teamA, teamB);
-  pthread_mutex_unlock(&team_array_mutex);
-  }*/
+void update_a_team(struct player_t *p, char *name){
+  while(balance_names(name) == 0){}
+  p -> name = name;
+  player_list[team_A_counter + team_B_counter] = *p;
+  team_A_counter += 1;
+  char temp[512];
+  if(strlen(a_team) > 0){
+    snprintf(temp, sizeof temp, "%s, %s", a_team, name);
+  }
+  else{
+    snprintf(temp, sizeof temp, "%s", name);
+  }
+  strcpy(a_team, temp);
+}
 
-void init_signals(void) {
-  // use sigaction(2) to catch SIGPIPE somehow
-  struct sigaction sigpipe;
-  memset(&sigpipe, 0, sizeof(sigpipe));
-  sigpipe.sa_handler = SIG_IGN;
-  sigaction(SIGPIPE, &sigpipe, NULL);
-  return;
+void update_b_team(struct player_t *p, char *name){
+  while(balance_names(name) == 0){}
+  p -> name = name;
+  player_list[team_A_counter + team_B_counter] = *p;
+  team_B_counter += 1;
+  char temp[512];
+  if(strlen(b_team) > 0){
+    snprintf(temp, sizeof temp, "%s, %s", b_team, name);
+  }
+  else{
+    snprintf(temp, sizeof temp, "%s", name);
+  }
+  strcpy(b_team, temp);
 }
 
 struct player_t team_setup(int connfd){
@@ -109,16 +113,16 @@ struct player_t team_setup(int connfd){
   char tempTeam[10];
   sscanf(player.recvBuff, "%s %s", tempName, tempTeam);
 
-  player.name = tempName;
+  //player.name = tempName;
   player.fd = connfd;
 
   if(strcmp(tempTeam, "1") == 0){
     //FIXME
     //update player list
     player.team = TEAM_A;
-    player_list[team_A_counter + team_B_counter] = player;
-    team_A_counter += 1;
-    update_a_team(*tempName);
+    //player_list[team_A_counter + team_B_counter] = player;
+    //team_A_counter += 1;
+    update_a_team(&player, tempName);
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_A_counter);
   }
@@ -126,9 +130,9 @@ struct player_t team_setup(int connfd){
     //FIXME
     //update player list
     player.team = TEAM_B;
-    player_list[team_A_counter + team_B_counter] = player;
-    team_B_counter += 1;
-    update_b_team(*tempName);
+    //player_list[team_A_counter + team_B_counter] = player;
+    //team_B_counter += 1;
+    update_b_team(&player, tempName);
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_B_counter);
   }
@@ -179,8 +183,7 @@ void *client_thread(void *arg)
     if(sec_counter > 0){
       //sends each client the newly updated player list
       char send[1024];
-      snprintf(send, sizeof send, "%s %s %d", a_team, b_team, sec_counter);
-      //snprintf(send, sizeof send, "%s %d", send, sec_counter);
+      snprintf(send, sizeof send, "%s | %s | %d", a_team, b_team, sec_counter);
 
       write(connfd, send, strlen(send)+1);
       sleep(1);
@@ -223,7 +226,6 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  init_signals();
   int listenfd = socket(AF_INET, SOCK_STREAM, 0);
   
   struct sockaddr_in serv_addr;
@@ -231,8 +233,8 @@ int main(int argc, char *argv[])
   memset(sendBuff, '0', sizeof sendBuff);
   memset(recvBuff, '0', sizeof recvBuff);
 
-  //memset(a_team, '0', sizeof a_team);
-  //memset(b_team, '0', sizeof b_team);
+  memset(a_team, 0, sizeof a_team);
+  memset(b_team, 0, sizeof b_team);
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
