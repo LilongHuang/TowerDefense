@@ -12,6 +12,8 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <ncurses.h>
+#include <poll.h>
+#include <ctype.h>
 
 int team = -1; // team: either 1 or 2 once assigned
 char* name = NULL;
@@ -38,8 +40,6 @@ int read_from_server() {
 }
 
 void loading_screen(){
-  initscr();/* Start curses mode   */
-
   for(int i = 0;i < 20;i++){
     mvprintw(i, 0, "|");
     mvprintw(i, 40, "|");
@@ -75,6 +75,56 @@ void loading_screen(){
     //getch();/* Wait for user input */
   }
 }
+
+void control_test() {
+  scrollok(stdscr, 1);       // allow the window to scroll
+  noecho();                  // don't echo characters
+  cbreak();                  // give me characters immediately
+  refresh();                 // update the screen
+  struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
+  while (1) {
+    switch (poll(pfds, 2, -1)) {
+
+      case -1:
+        perror("poll");
+        exit(EXIT_FAILURE);
+
+      default:
+        if ((pfds[0].revents & POLLIN) != 0) {
+          // client
+          int c = getch();
+          if (c == 81 || c == 113) {
+            printw("Exiting.\n");
+            return;
+          }
+          else if (iscntrl(c))
+            printw("Client pressed '^%c'.\n", c + 64);
+          else
+            printw("Client pressed '%c'.\n", c);
+            sendBuff[0] = c;
+            sendBuff[1] = '\0';
+            send_to_server();
+          refresh();
+        }
+        if ((pfds[1].revents & POLLIN) != 0) {
+          // server
+          int c;
+          ssize_t size = read(sockfd, &c, 1);
+          if (size > 0) {
+            if ((c & 0xFF) != 0) {
+              printw("Server pressed '%c'.\n", c);
+            }
+          }
+          else {
+            printw("[Server closed connection.]\n");
+            return;
+          }
+        refresh();
+        }
+    }
+  }
+}
+
 
 int server_connect(char* port)
 {
@@ -242,6 +292,7 @@ int main(int argc, char *argv[])
   //FIX-ME
   //need to add loop to refresh loading screen for T-Minus 30 seconds
   //for when new users are joining the game
+
   loading_screen();
   start_color();
   loadMap(mapNameFromServer);

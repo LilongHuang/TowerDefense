@@ -14,6 +14,8 @@
 #include <semaphore.h>
 
 #define max_players 10
+#define TIMER_START 3
+#define EVENT_QUEUE_SIZE 20
 
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
 
@@ -22,9 +24,22 @@ struct player_t
   pthread_mutex_t player_mutex;
   char *name;
   team_t team;
+  int r; // row; y-coordinate
+  int c; // column; x-coordinate
   int fd;
   char recvBuff[1024];
   char sendBuff[1024];
+};
+
+typedef enum {MOVE_REL, MOVE_ABS, SHOOT} event_type_t;
+
+struct event_t
+{
+  event_type_t type;
+  int c;
+  char* player;
+  //int rows;
+  //int cols;
 };
 
 int team_A_counter = 0;
@@ -38,13 +53,18 @@ char recvBuff[1024];
 
 int clientCount = 0;
 
-int sec_counter = 30;
+int sec_counter = TIMER_START;
 
 struct player_t player_list[10];
-
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 char mapName[1024];
+
+struct event_t next_event[EVENT_QUEUE_SIZE];
+int event_count = 0;
+pthread_mutex_t next_event_mutex = PTHREAD_MUTEX_INITIALIZER;
+sem_t next_event_space_remaining;
+sem_t next_event_messages_waiting;
 
 void init_player(struct player_t *p){
   pthread_mutex_init( &(p->player_mutex), NULL);
@@ -198,6 +218,23 @@ void *client_thread(void *arg)
 	{
 	  // echo all input back to client
 	  write(connfd, recvBuff, n);
+	  
+	  // capture event queue, and prepare to add a new event
+	  pthread_mutex_lock(&next_event_mutex);
+	  sem_wait(&next_event_space_remaining);
+	  // initialize event to put on queue
+	  struct event_t event;
+	  event.type = SHOOT;
+	  event.c = recvBuff[0];
+	  event.player = player.name;
+	  printf("Added %c by %s\n", event.c, player.name);
+	  // put event on queue
+	  int event_count;
+	  sem_getvalue(&next_event_messages_waiting, &event_count);
+	  next_event[event_count] = event;
+	  // release resources
+	  pthread_mutex_unlock(&next_event_mutex);
+	  sem_post(&next_event_messages_waiting);
 	}
       else {
 	// They disconnected-- release the client
@@ -211,11 +248,44 @@ void *client_thread(void *arg)
   return NULL;
 }
 
+void pop_message(void) {
+  sem_wait(&next_event_messages_waiting);
+  pthread_mutex_lock(&next_event_mutex);
+  
+  struct event_t event = next_event[0];
+  
+  // process message
+  for (int i = 0; i < clientCount; i++) {
+    struct player_t p = player_list[i];
+    pthread_mutex_lock(&(p.player_mutex));
+    // FIXME figure out why p.name returns "(null)"
+    int n = sprintf(p.sendBuff, "Hey %s: %s hit %c\n", p.fd, event.player, event.c);
+    write(player_list[i].fd, p.sendBuff, n);
+    pthread_mutex_unlock(&(p.player_mutex));
+  }
+  
+  // slide all events over to fill empty spot
+  int last_event_index;
+  sem_getvalue(&next_event_messages_waiting, &last_event_index);
+  for (int i = 0; i < last_event_index + 1; i++) {
+    next_event[i] = next_event[i+1];
+  }
+
+  // release resources
+  pthread_mutex_unlock(&next_event_mutex);
+  sem_post(&next_event_space_remaining);
+}
+
 void *loading_thread(void *arg){
-  for(int i = 3; i >= 0; i--){
+  for(int i = TIMER_START; i >= 0; i--){
     sec_counter = i;
     sleep(1);
   }
+  
+  while (1) {
+    pop_message();
+  }
+  
   return NULL;
 }
 
@@ -230,6 +300,8 @@ int main(int argc, char *argv[])
   strncpy(mapName, argv[1], strlen(argv[1]) + 1);
   
   init_signals();
+  sem_init(&next_event_space_remaining, 0, EVENT_QUEUE_SIZE);
+  sem_init(&next_event_messages_waiting, 0, 0);
   int listenfd = socket(AF_INET, SOCK_STREAM, 0);
   
   struct sockaddr_in serv_addr;
