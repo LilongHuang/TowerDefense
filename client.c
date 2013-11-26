@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
   //FIX-ME
   //need to add loop to refresh loading screen for T-Minus 30 seconds
   //for when new users are joining the game
-
+  initscr();
   loading_screen();
   start_color();
   loadMap(mapNameFromServer);

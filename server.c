@@ -259,7 +259,7 @@ void pop_message(void) {
     struct player_t p = player_list[i];
     pthread_mutex_lock(&(p.player_mutex));
     // FIXME figure out why p.name returns "(null)"
-    int n = sprintf(p.sendBuff, "Hey %s: %s hit %c\n", p.fd, event.player, event.c);
+    int n = sprintf(p.sendBuff, "Hey %i: %s hit %c\n", p.fd, event.player, event.c);
     write(player_list[i].fd, p.sendBuff, n);
     pthread_mutex_unlock(&(p.player_mutex));
   }
