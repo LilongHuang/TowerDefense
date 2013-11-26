@@ -14,6 +14,7 @@
 
 int team = -1; // team: either 1 or 2 once assigned
 char* name = NULL;
+char recvName[10];
 char recvBuff[1024];
 char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
@@ -36,36 +37,22 @@ int read_from_server() {
 
 void loading_screen(){
   initscr();/* Start curses mode   */
+  int stop_loading_screen = 1;
+  mvprintw(0, 0, recvName);//printing name revieved from server after balancing names
+  mvprintw(1, 0, "Count Down:");
 
-  for(int i = 0;i < 20;i++){
-    mvprintw(i, 0, "|");
-    mvprintw(i, 40, "|");
-    mvprintw(i, 80, "|");
-  }
-
-  for(int i = 0;i < 81;i++){
-    mvprintw(0, i, "*");
-    mvprintw(20, i, "-");
-  }
-
-  mvprintw(2, 17, "Team A");
-  mvprintw(2, 57, "Team B");
-
-  while(1){
+  while(stop_loading_screen){
     if(read_from_server() != 0){
-      /*char sec_left[10];
-      char teamA[1024];
-      char teamB[1024];*/
-      
-      mvprintw(30, 40, recvBuff);
-    }
-
-    //FIX-ME
-    //need to add which players belong to which team here
+      if(strcmp(recvBuff, "Game is starting!") == 0)
+	stop_loading_screen = 0;
+      char sec_left[10];
+      sscanf(recvBuff, "%s", sec_left);
+      mvprintw(1, 12, sec_left);
+     }
 
     refresh();/* Print it on to the real screen */
-    //getch();/* Wait for user input */
   }
+  mvprintw(2, 0, recvBuff);
   endwin();/* End curses mode  */
 }
 
@@ -164,6 +151,7 @@ int main(int argc, char *argv[])
   
   parse_settings(argv[2], argv[3]);
 
+
   printf("Request name %s and team %d\n", name, team);
 
   //construct proper sendBuff
@@ -176,6 +164,7 @@ int main(int argc, char *argv[])
   int readbytes = read_from_server();
 
   //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
+  sscanf(recvBuff, "%s", recvName);
   printf("%s\n", recvBuff);
   char *ghs = "Game has already started";
   if(strcmp(ghs, recvBuff) == 0){

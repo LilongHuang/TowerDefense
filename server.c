@@ -113,28 +113,23 @@ struct player_t team_setup(int connfd){
   char tempTeam[10];
   sscanf(player.recvBuff, "%s %s", tempName, tempTeam);
 
-  //player.name = tempName;
   player.fd = connfd;
 
   if(strcmp(tempTeam, "1") == 0){
-    //FIXME
     //update player list
     player.team = TEAM_A;
-    //player_list[team_A_counter + team_B_counter] = player;
-    //team_A_counter += 1;
+
     update_a_team(&player, tempName);
 
-    snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_A_counter);
+    snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
   else if(strcmp(tempTeam, "2") == 0){
-    //FIXME
     //update player list
     player.team = TEAM_B;
-    //player_list[team_A_counter + team_B_counter] = player;
-    //team_B_counter += 1;
+
     update_b_team(&player, tempName);
 
-    snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_B_counter);
+    snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
 
   // echo all input back to client
@@ -183,7 +178,7 @@ void *client_thread(void *arg)
     if(sec_counter > 0){
       //sends each client the newly updated player list
       char send[1024];
-      snprintf(send, sizeof send, "%s | %s | %d", a_team, b_team, sec_counter);
+      snprintf(send, sizeof send, "%d", sec_counter);
 
       write(connfd, send, strlen(send)+1);
       sleep(1);
@@ -211,7 +206,7 @@ void *client_thread(void *arg)
 }
 
 void *loading_thread(void *arg){
-  for(int i = 30; i >= 0; i--){
+  for(int i = 5; i >= -1; i--){
     sec_counter = i;
     sleep(1);
   }
