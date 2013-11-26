@@ -21,21 +21,20 @@ char* getMapName();
 
 char* getAuthor();
 
-char* getCastleStrength();
+int getCastleStrength();
 
-char* getCastleTouch();
+int getCastleTouch();
 
-char* getAttackerWin();
+int getAttackerWin();
 
-char* getAttackerShots();
+int getAttackerShots();
 
-char* getAttackerRespawn();
+int getAttackerRespawn();
 
-char* getDefenderWin();
+int getDefenderWin();
 
-char* getDefenderShots(); 
+int getDefenderShots(); 
 
-char* getDefenderRespawn();
+int getDefenderRespawn();
 
-void loadMap(int, char**);
-
+void loadMap(char[1024]);

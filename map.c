@@ -135,10 +135,10 @@ char *replace_str(char *str, char *orig, char *rep) {
 
 
 
-void loadMap(char *argv[]) {
+void loadMap(char mapFile[1024]) {
 	
 	FILE *file;
-	file = fopen(argv[1], "r");
+	file = fopen(mapFile, "r");
 
 	if (file == NULL) {
 		perror ("Error opening file");

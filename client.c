@@ -1,3 +1,4 @@
+#include "map.h"
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -18,7 +19,7 @@ char recvBuff[1024];
 char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
 
-char* mapName[1024];
+char mapNameFromServer[1024];
 
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
@@ -58,10 +59,10 @@ void loading_screen(){
       /*char sec_left[10];
       char teamA[1024];
       char teamB[1024];*/
-      char* gisFromServer = " ";
-      char* gameStart = "Game is starting!";
-      mvprintw(30, 40, recvBuff);
-      sscanf(recvBuff, "%s %s", gisFromServer, mapName[0]);
+      char gisFromServer[1024];
+      char* gameStart = "GameIsStarting!";
+      mvprintw(10, 40, recvBuff);
+      sscanf(recvBuff, "%s %s", gisFromServer, mapNameFromServer);
       if (strcmp(gisFromServer, gameStart) == 0) {
 	break;
       }
@@ -73,11 +74,6 @@ void loading_screen(){
     refresh();/* Print it on to the real screen */
     //getch();/* Wait for user input */
   }
-}
-
-void gameStart_screen() {
-  start_color();
-    
 }
 
 int server_connect(char* port)
@@ -160,6 +156,39 @@ void read_socket()
   }
 }
 
+void initBoard(){
+  init_pair(1, COLOR_BLACK, COLOR_GREEN);
+  init_pair(2, COLOR_BLACK, COLOR_RED);
+  init_pair(3, COLOR_BLACK, COLOR_BLUE);
+  init_pair(4, COLOR_BLACK, COLOR_WHITE);
+  init_pair(5, COLOR_BLACK, COLOR_CYAN);
+
+  //background team A (red)
+  for(int i = 70; i < 80; i++){
+    for(int j = 1; j <= 10; j++){
+      attron(COLOR_PAIR(2));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //background team B (blue)
+  for(int i = 70; i < 80; i++){
+    for(int j = 11; j <= 20; j++){
+      attron(COLOR_PAIR(3));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //description area (scrollable)
+  for(int i = 0; i < 80; i++){
+    for(int j = 21; j < 24; j++){
+      attron(COLOR_PAIR(4));
+      mvprintw(j, i, " ");
+    }
+  }
+
+}
+
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -214,7 +243,11 @@ int main(int argc, char *argv[])
   //need to add loop to refresh loading screen for T-Minus 30 seconds
   //for when new users are joining the game
   loading_screen();
-  gameStart_screen();
+  start_color();
+  loadMap(mapNameFromServer);
+  initBoard();/* creates play board */
+  refresh();/* Print it on to the real screen */
+  getch();/* Wait for user input */
   endwin();
   close(sockfd);
   return 0;

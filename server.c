@@ -188,9 +188,9 @@ void *client_thread(void *arg)
       sleep(1);
     }
     else if(sec_counter == 0){
-      char *game_started = "Game is starting!";
+      char *game_started = "GameIsStarting!";
       char gameStartAndMapName[1024];
-      scanf(gameStartAndMapName, "%s %s", game_started, mapName);
+      sprintf(gameStartAndMapName, "%s %s", game_started, mapName);
       write(connfd, gameStartAndMapName, strlen(gameStartAndMapName)+1);
     }
     else{
