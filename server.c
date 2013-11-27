@@ -31,6 +31,8 @@ struct player_t
   char sendBuff[1024];
 };
 
+struct player_t SYSTEM_PLAYER;
+
 typedef enum {MOVE_REL, MOVE_ABS, SHOOT} event_type_t;
 
 struct event_t
@@ -65,44 +67,18 @@ sem_t next_event_space_remaining;
 sem_t next_event_messages_waiting;
 
 void init_player(struct player_t *p){
-  pthread_mutex_init( &(p->player_mutex), NULL);
+  pthread_mutex_init(&(p->player_mutex), NULL);
   p -> team = UNASSIGNED;
   p -> fd = -1;
 }
 
-void update_a_team(char name){
-  strcat(a_team, &name);
+void update_a_team(const char* name){
+  strcat(a_team, name);
 }
 
-void update_b_team(char name){
-  strcat(b_team, &name);
+void update_b_team(const char* name){
+  strcat(b_team, name);
 }
-
-//not in use, found a better way
-//keeping it for code reusability
-/*void update_teams(int connfd){
-  pthread_mutex_lock(&team_array_mutex);
-  char teamA[1024];
-  char teamB[1024];
-  //int a_counter = 0;
-  //int b_counter = 0;
-  for(int i = 0; i < team_A_counter + team_B_counter; i++){
-    struct player_t temp_player = player_list[i];
-    if(temp_player.team == TEAM_A){
-      //teamA[a_counter] = temp_player.name;
-      strcat(teamA, temp_player.name);
-      //strcat(teamA, " ");
-    }
-    else{
-      //teamB[b_counter] = temp_player.name;
-      strcat(teamB, temp_player.name);
-      //strcat(teamB, " ");
-    }
-  }
-
-  snprintf(current_teams, sizeof current_teams, "%s, %s", teamA, teamB);
-  pthread_mutex_unlock(&team_array_mutex);
-  }*/
 
 void init_signals(void) {
   // use sigaction(2) to catch SIGPIPE somehow
@@ -120,8 +96,11 @@ struct player_t team_setup(int connfd){
   init_player(&player);
 
   int n;
-
-  pthread_mutex_lock(&player.player_mutex);
+  /*printf("TS: Locking player %s\n", player.name);
+  pthread_mutex_lock(&(player.player_mutex));
+  printf("%s", "TS: Locked.\n");
+  pthread_mutex_unlock(&(player.player_mutex));
+  printf("%s", "TS: Released.\n");*/
 
   n = read(connfd, player.recvBuff, sizeof player.recvBuff);
 
@@ -138,17 +117,25 @@ struct player_t team_setup(int connfd){
     player.team = TEAM_A;
     player_list[team_A_counter + team_B_counter] = player;
     team_A_counter += 1;
-    update_a_team(*tempName);
+    // FIXME for some reason, this is trampling on the value of the semaphore?
+    //update_a_team(tempName);
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_A_counter);
   }
-  else if(strcmp(tempTeam, "2") == 0){
+  else { // if(strcmp(tempTeam, "2") == 0){
     //FIXME
     //update player list
     player.team = TEAM_B;
     player_list[team_A_counter + team_B_counter] = player;
     team_B_counter += 1;
-    update_b_team(*tempName);
+    
+    int p = 0;
+    sem_getvalue(&next_event_messages_waiting, &p);
+    printf("TS: %i\n", p);
+    // FIXME this was trampling on the value of the semaphore
+    //update_b_team(tempName);
+    sem_getvalue(&next_event_messages_waiting, &p);
+    printf("TS: %i\n", p);
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_B_counter);
   }
@@ -156,10 +143,70 @@ struct player_t team_setup(int connfd){
   // echo all input back to client
   write(connfd, player.sendBuff, strlen(player.sendBuff) + 1);
 
-  pthread_mutex_unlock(&player.player_mutex);
-
+  pthread_mutex_unlock(&(player.player_mutex));
   pthread_mutex_unlock(&team_array_mutex);
+  printf("Player mutex unlocked for %s\n", player.name);
+
   return player;
+}
+
+void pop_message(void) {
+  printf("%s\n", "Popping message");
+  sem_wait(&next_event_messages_waiting);
+  pthread_mutex_lock(&next_event_mutex);
+  pthread_mutex_lock(&team_array_mutex);
+ 
+  struct event_t event = next_event[0];
+  
+  printf("  Sending message to %i player(s):\n", clientCount);
+  // process message
+  for (int i = 0; i < clientCount; i++) {
+    struct player_t p = player_list[i];
+    //printf("Acquiring lock on %s\n", p.name);
+    pthread_mutex_lock(&(p.player_mutex));
+    //printf("%s", "Lock acquired.\n");
+    int n = sprintf(p.sendBuff, "Hey %s [%i]: %s hit %c", p.name, p.fd, event.player, event.c);
+    write(player_list[i].fd, p.sendBuff, n+1);
+    pthread_mutex_unlock(&(p.player_mutex));
+  }
+  
+  // slide all events over to fill empty spot
+  int last_event_index = 0;
+  sem_getvalue(&next_event_messages_waiting, &last_event_index);
+  printf("Last event is #%i\n", last_event_index);
+  for (int i = 0; i < last_event_index + 1; i++) {
+    next_event[i] = next_event[i+1];
+  }
+
+  // release resources
+  pthread_mutex_unlock(&team_array_mutex);
+  pthread_mutex_unlock(&next_event_mutex);
+  sem_post(&next_event_space_remaining);
+}
+
+void push_message(const char m, const struct player_t player) {
+  // WARNING: If this is updated to ever access more than the player's name,
+  // update the system player's initialization appropriately!
+
+  // capture event queue, and prepare to add a new event
+  sem_wait(&next_event_space_remaining);
+  pthread_mutex_lock(&next_event_mutex);
+  // initialize event to put on queue
+  struct event_t event;
+  event.type = SHOOT;
+  event.c = m;
+  event.player = player.name;
+  printf(">> Adding %c by %s\n", event.c, player.name);
+  // put event on queue
+  int event_count = 0;
+  sem_getvalue(&next_event_messages_waiting, &event_count);
+  next_event[event_count] = event;
+  // release resources
+  pthread_mutex_unlock(&next_event_mutex);
+  sem_post(&next_event_messages_waiting);
+  event_count = 0;
+  sem_getvalue(&next_event_messages_waiting, &event_count);
+  printf("Completed push. Next event is #%i\n", event_count);
 }
 
 void *client_thread(void *arg)
@@ -169,8 +216,8 @@ void *client_thread(void *arg)
   //int length = sprintf(sendBuff, "[Clients: %d]", player_count);
   //write(connfd, sendBuff, length+1);
 
-
-  if(sec_counter == 0){
+  
+  if(sec_counter <= 0){
     char *ghs = "Game has already started";
     write(connfd, ghs, strlen(ghs)+1);
     close(connfd);
@@ -180,22 +227,15 @@ void *client_thread(void *arg)
   int n;
   
   struct player_t player = team_setup(connfd);
-
+  //printf("Player %s has FD %i\n", player_list[0].name, player_list[0].fd);
+  //printf("Player %s has FD %i\n", player.name, player.fd);
+  /*printf("%s", "Attempting lock\n");
+  pthread_mutex_lock(&(player_list[0].player_mutex));
+  printf("%s", "Locked\n");
+  pthread_mutex_unlock(&(player_list[0].player_mutex));
+  printf("%s", "Released\n");*/
   while (1)
   {
-    /*if ((n = read(connfd, recvBuff, sizeof recvBuff)) != 0)
-    {
-
-      // echo all input back to client
-      //write(connfd, sendBuff, strlen(sendBuff) + 1);
-
-    }
-    else
-    {
-      close(connfd);
-      pthread_exit(0);
-      }*/
-
     if(sec_counter > 0){
       //sends each client the newly updated player list
       char send[1024];
@@ -205,34 +245,15 @@ void *client_thread(void *arg)
       write(connfd, send, strlen(send)+1);
       sleep(1);
     }
-    else if(sec_counter == 0){
-      char *game_started = "Game is starting!";
-      write(connfd, game_started, strlen(game_started)+1);
-      sec_counter--;
-    }
-    else{
-      if ((n = read(connfd, recvBuff, sizeof recvBuff)) != 0)
-	{
+    else {
+      pthread_mutex_lock(&(player.player_mutex));
+      if ((n = read(connfd, player.recvBuff, sizeof player.recvBuff)) != 0) {
 	  // echo all input back to client
-	  write(connfd, recvBuff, n);
-	  
-	  // capture event queue, and prepare to add a new event
-	  pthread_mutex_lock(&next_event_mutex);
-	  sem_wait(&next_event_space_remaining);
-	  // initialize event to put on queue
-	  struct event_t event;
-	  event.type = SHOOT;
-	  event.c = recvBuff[0];
-	  event.player = player.name;
-	  printf("Added %c by %s\n", event.c, player.name);
-	  // put event on queue
-	  int event_count;
-	  sem_getvalue(&next_event_messages_waiting, &event_count);
-	  next_event[event_count] = event;
-	  // release resources
-	  pthread_mutex_unlock(&next_event_mutex);
-	  sem_post(&next_event_messages_waiting);
-	}
+	  //printf("Writing %d bytes to buffer\n", n);
+          //write(connfd, player.recvBuff, n);
+	  printf("Pushing %c onto event queue from %s\n", player.recvBuff[0], player.name);
+	  push_message(player.recvBuff[0], player);
+      }
       else {
 	// They disconnected-- release the client
 	//printf("Server releasing client [%d remain]\n", player_count-1);
@@ -240,37 +261,10 @@ void *client_thread(void *arg)
 	//player_count--;
 	pthread_exit(0);
       }
+      pthread_mutex_unlock(&(player.player_mutex));
     }
   }
   return NULL;
-}
-
-void pop_message(void) {
-  sem_wait(&next_event_messages_waiting);
-  pthread_mutex_lock(&next_event_mutex);
-  
-  struct event_t event = next_event[0];
-  
-  // process message
-  for (int i = 0; i < clientCount; i++) {
-    struct player_t p = player_list[i];
-    pthread_mutex_lock(&(p.player_mutex));
-    // FIXME figure out why p.name returns "(null)"
-    int n = sprintf(p.sendBuff, "Hey %s: %s hit %c\n", p.fd, event.player, event.c);
-    write(player_list[i].fd, p.sendBuff, n);
-    pthread_mutex_unlock(&(p.player_mutex));
-  }
-  
-  // slide all events over to fill empty spot
-  int last_event_index;
-  sem_getvalue(&next_event_messages_waiting, &last_event_index);
-  for (int i = 0; i < last_event_index + 1; i++) {
-    next_event[i] = next_event[i+1];
-  }
-
-  // release resources
-  pthread_mutex_unlock(&next_event_mutex);
-  sem_post(&next_event_space_remaining);
 }
 
 void *loading_thread(void *arg){
@@ -278,7 +272,11 @@ void *loading_thread(void *arg){
     sec_counter = i;
     sleep(1);
   }
-  
+
+  printf("%s", "Adding Game Start Event to queue\n");
+  push_message('G', SYSTEM_PLAYER);
+  printf("%s", "Game Start Event added.\n");
+
   while (1) {
     pop_message();
   }
@@ -293,10 +291,15 @@ int main(int argc, char *argv[])
     printf("Usage: %s mapfile port\n", argv[0]);
     return 1;
   }
-
+  
+  SYSTEM_PLAYER.name = "System";
+  
   init_signals();
   sem_init(&next_event_space_remaining, 0, EVENT_QUEUE_SIZE);
   sem_init(&next_event_messages_waiting, 0, 0);
+  int p = 0;
+  sem_getvalue(&next_event_messages_waiting, &p);
+  printf("Init: %i\n", p);
   int listenfd = socket(AF_INET, SOCK_STREAM, 0);
   
   struct sockaddr_in serv_addr;
@@ -323,7 +326,7 @@ int main(int argc, char *argv[])
   while(1)
   {
     int connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
-
+    printf("Accepted a connection on FD %i\n", connfd);
     pthread_t conn_thread;
     if (pthread_create(&conn_thread, NULL, client_thread, &connfd) != 0)
     {

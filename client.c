@@ -91,29 +91,27 @@ void control_test() {
           }
           else if (iscntrl(c))
             printw("Client pressed '^%c'.\n", c + 64);
-          else
+          else {
             printw("Client pressed '%c'.\n", c);
             sendBuff[0] = c;
             sendBuff[1] = '\0';
             send_to_server();
-          refresh();
+          }
         }
         if ((pfds[1].revents & POLLIN) != 0) {
           // server
           int c;
-          ssize_t size = read(sockfd, &c, 1);
+          ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
-            if ((c & 0xFF) != 0) {
-              printw("Server pressed '%c'.\n", c);
-            }
+            printw("Server pressed '%s'.\n", recvBuff);
           }
           else {
             printw("[Server closed connection.]\n");
             return;
           }
-        refresh();
         }
     }
+    refresh();
   }
 }
 
