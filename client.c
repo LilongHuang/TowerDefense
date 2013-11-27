@@ -281,9 +281,9 @@ int main(int argc, char *argv[])
   loadMap(mapNameFromServer);
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
-  //getch();/* Wait for user input */
-  endwin();
+  getch();/* Wait for user input */ 
   control_test();
+  endwin();
   close(sockfd);
   return 0;
 }
