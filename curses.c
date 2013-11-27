@@ -38,7 +38,7 @@ void initBoard(){
 int main(int argc, char* argv[]){
   initscr();/* Start curses mode   */
   start_color();
-  loadMap(argc, argv);
+  loadMap(argv[1]);
   initBoard();/* creates play board */
   //loadMap(argc, argv);
   refresh();/* Print it on to the real screen */

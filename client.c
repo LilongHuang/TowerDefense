@@ -1,3 +1,4 @@
+#include "map.h"
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -16,9 +17,12 @@
 
 int team = -1; // team: either 1 or 2 once assigned
 char* name = NULL;
+char recvName[10];
 char recvBuff[1024];
 char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
+
+char mapNameFromServer[1024];
 
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
@@ -37,34 +41,21 @@ int read_from_server() {
 }
 
 void loading_screen(){
-  for(int i = 0;i < 20;i++){
-    mvprintw(i, 0, "|");
-    mvprintw(i, 40, "|");
-    mvprintw(i, 80, "|");
-  }
+  int stop_loading_screen = 1;
+  mvprintw(0, 0, recvName);//printing name revieved from server after balancing names
+  mvprintw(1, 0, "Count Down:");
 
-  for(int i = 0;i < 81;i++){
-    mvprintw(0, i, "*");
-    mvprintw(20, i, "-");
-  }
-
-  mvprintw(2, 17, "Team A");
-  mvprintw(2, 57, "Team B");
-
-  while(1){
+  while(stop_loading_screen){
+    char gisFromServer[1024];
+    char* gameStart = "GameIsStarting!";
     if(read_from_server() != 0){
-      /*char sec_left[10];
-      char teamA[1024];
-      char teamB[1024];*/
-
-      mvprintw(30, 40, recvBuff);
-    }
-
-    //FIX-ME
-    //need to add which players belong to which team here
-
+      sscanf(recvBuff, "%s %s", gisFromServer, mapNameFromServer);
+      mvprintw(1, 12, recvBuff);
+      if (strcmp(gisFromServer, gameStart) == 0) {
+        stop_loading_screen = 0;
+      }
+     }
     refresh();/* Print it on to the real screen */
-    //getch();/* Wait for user input */
   }
 }
 
@@ -196,6 +187,39 @@ void read_socket()
   }
 }
 
+void initBoard(){
+  init_pair(1, COLOR_BLACK, COLOR_GREEN);
+  init_pair(2, COLOR_BLACK, COLOR_RED);
+  init_pair(3, COLOR_BLACK, COLOR_BLUE);
+  init_pair(4, COLOR_BLACK, COLOR_WHITE);
+  init_pair(5, COLOR_BLACK, COLOR_CYAN);
+
+  //background team A (red)
+  for(int i = 70; i < 80; i++){
+    for(int j = 1; j <= 10; j++){
+      attron(COLOR_PAIR(2));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //background team B (blue)
+  for(int i = 70; i < 80; i++){
+    for(int j = 11; j <= 20; j++){
+      attron(COLOR_PAIR(3));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //description area (scrollable)
+  for(int i = 0; i < 80; i++){
+    for(int j = 21; j < 24; j++){
+      attron(COLOR_PAIR(4));
+      mvprintw(j, i, " ");
+    }
+  }
+
+}
+
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -211,6 +235,7 @@ int main(int argc, char *argv[])
   
   parse_settings(argv[2], argv[3]);
 
+
   printf("Request name %s and team %d\n", name, team);
 
   //construct proper sendBuff
@@ -223,6 +248,7 @@ int main(int argc, char *argv[])
   int readbytes = read_from_server();
 
   //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
+  sscanf(recvBuff, "%s", recvName);
   printf("%s\n", recvBuff);
   char *ghs = "Game has already started";
   if(strcmp(ghs, recvBuff) == 0){
@@ -250,10 +276,14 @@ int main(int argc, char *argv[])
   //need to add loop to refresh loading screen for T-Minus 30 seconds
   //for when new users are joining the game
   initscr();
-  //loading_screen();
+  loading_screen();
+  start_color();
+  loadMap(mapNameFromServer);
+  initBoard();/* creates play board */
+  refresh();/* Print it on to the real screen */
+  //getch();/* Wait for user input */
+  endwin();
   control_test();
-
-  endwin();/* End curses mode  */
   close(sockfd);
   return 0;
 }

@@ -10,8 +10,8 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
-#include <signal.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #define max_players 10
 #define TIMER_START 3
@@ -47,8 +47,8 @@ struct event_t
 int team_A_counter = 0;
 int team_B_counter = 0;
 
-char a_team[1024];
-char b_team[1024];
+char a_team[512];
+char b_team[512];
 
 char sendBuff[1024];
 char recvBuff[1024];
@@ -59,6 +59,8 @@ int sec_counter = TIMER_START;
 
 struct player_t player_list[10];
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+char mapName[1024];
 
 struct event_t next_event[EVENT_QUEUE_SIZE];
 int event_count = 0;
@@ -72,12 +74,52 @@ void init_player(struct player_t *p){
   p -> fd = -1;
 }
 
-void update_a_team(const char* name){
-  strcat(a_team, name);
+int balance_names(char *name){
+  //srand(123);
+  for(int i = 0; i < team_A_counter + team_B_counter; i++){
+    struct player_t temp_player = player_list[i];
+    printf("%s, %s\n", name, temp_player.name);
+    if(strcmp(name, temp_player.name) == 0){
+      //int rn = rand();
+      //char rn_string[128];
+      //sprintf(rn_string, "%d", rn);
+      //strcpy(name, rn_string);
+      strcat(name, "1");
+      printf("%s\n", name);
+      return 0;
+    }
+  }
+  return 1;
 }
 
-void update_b_team(const char* name){
-  strcat(b_team, name);
+void update_a_team(struct player_t *p, char *name){
+  while(balance_names(name) == 0){}
+  p -> name = name;
+  player_list[team_A_counter + team_B_counter] = *p;
+  team_A_counter += 1;
+  char temp[512];
+  if(strlen(a_team) > 0){
+    snprintf(temp, sizeof temp, "%s, %s", a_team, name);
+  }
+  else{
+    snprintf(temp, sizeof temp, "%s", name);
+  }
+  strcpy(a_team, temp);
+}
+
+void update_b_team(struct player_t *p, char *name){
+  while(balance_names(name) == 0){}
+  p -> name = name;
+  player_list[team_A_counter + team_B_counter] = *p;
+  team_B_counter += 1;
+  char temp[512];
+  if(strlen(b_team) > 0){
+    snprintf(temp, sizeof temp, "%s, %s", b_team, name);
+  }
+  else{
+    snprintf(temp, sizeof temp, "%s", name);
+  }
+  strcpy(b_team, temp);
 }
 
 void init_signals(void) {
@@ -108,36 +150,23 @@ struct player_t team_setup(int connfd){
   char tempTeam[10];
   sscanf(player.recvBuff, "%s %s", tempName, tempTeam);
 
-  player.name = tempName;
   player.fd = connfd;
 
   if(strcmp(tempTeam, "1") == 0){
-    //FIXME
     //update player list
     player.team = TEAM_A;
-    player_list[team_A_counter + team_B_counter] = player;
-    team_A_counter += 1;
-    // FIXME for some reason, this is trampling on the value of the semaphore?
-    //update_a_team(tempName);
 
-    snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_A_counter);
+    update_a_team(&player, tempName);
+
+    snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
   else { // if(strcmp(tempTeam, "2") == 0){
-    //FIXME
     //update player list
     player.team = TEAM_B;
-    player_list[team_A_counter + team_B_counter] = player;
-    team_B_counter += 1;
-    
-    int p = 0;
-    sem_getvalue(&next_event_messages_waiting, &p);
-    printf("TS: %i\n", p);
-    // FIXME this was trampling on the value of the semaphore
-    //update_b_team(tempName);
-    sem_getvalue(&next_event_messages_waiting, &p);
-    printf("TS: %i\n", p);
 
-    snprintf(player.sendBuff, sizeof player.sendBuff, "%s %s %d", tempName, tempTeam, team_B_counter);
+    update_b_team(&player, tempName);
+
+    snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
 
   // echo all input back to client
@@ -165,8 +194,17 @@ void pop_message(void) {
     //printf("Acquiring lock on %s\n", p.name);
     pthread_mutex_lock(&(p.player_mutex));
     //printf("%s", "Lock acquired.\n");
-    int n = sprintf(p.sendBuff, "Hey %s [%i]: %s hit %c", p.name, p.fd, event.player, event.c);
-    write(player_list[i].fd, p.sendBuff, n+1);
+    
+    // Game Start
+    if (event.c == 'G') {
+      char *game_started = "GameIsStarting!";
+      sprintf(p.sendBuff, "%s %s", game_started, mapName);
+      write(player_list[i].fd, p.sendBuff, strlen(p.sendBuff)+1);
+    }
+    else {
+      int n = sprintf(p.sendBuff, "Hey %s [%i]: %s hit %c", p.name, p.fd, event.player, event.c);
+      write(player_list[i].fd, p.sendBuff, n+1);
+    }
     pthread_mutex_unlock(&(p.player_mutex));
   }
   
@@ -239,7 +277,6 @@ void *client_thread(void *arg)
     if(sec_counter > 0){
       //sends each client the newly updated player list
       char send[1024];
-      //snprintf(send, sizeof send, "%s %s %d", a_team, b_team, sec_counter);
       snprintf(send, sizeof send, "%d", sec_counter);
 
       write(connfd, send, strlen(send)+1);
@@ -293,6 +330,8 @@ int main(int argc, char *argv[])
   }
   
   SYSTEM_PLAYER.name = "System";
+
+  strncpy(mapName, argv[1], strlen(argv[1]) + 1);
   
   init_signals();
   sem_init(&next_event_space_remaining, 0, EVENT_QUEUE_SIZE);
@@ -307,8 +346,8 @@ int main(int argc, char *argv[])
   memset(sendBuff, '0', sizeof sendBuff);
   memset(recvBuff, '0', sizeof recvBuff);
 
-  memset(a_team, '0', sizeof a_team);
-  memset(b_team, '0', sizeof b_team);
+  memset(a_team, 0, sizeof a_team);
+  memset(b_team, 0, sizeof b_team);
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
