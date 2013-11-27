@@ -14,6 +14,7 @@
 #include <signal.h>
 
 #define max_players 10
+#define players_per_team 5
 #define TIMER_START 30
 #define EVENT_QUEUE_SIZE 20
 
@@ -72,6 +73,60 @@ void init_player(struct player_t *p){
   p -> fd = -1;
 }
 
+void a_to_b_team(){
+  for(int i = (team_A_counter + team_B_counter)-1; i > 0; i--){
+    struct player_t p = player_list[i];
+    if(p.team == TEAM_A){
+      p.team = TEAM_B;
+      team_A_counter -= 1;
+      team_B_counter += 1;
+      break;
+    }
+  }
+}
+
+void b_to_a_team(){
+  for(int i = (team_A_counter + team_B_counter)-1; i > 0; i--){
+    struct player_t p = player_list[i];
+    if(p.team == TEAM_B){
+      p.team = TEAM_A;
+      team_A_counter += 1;
+      team_B_counter -= 1;
+      break;
+    }
+  }
+}
+
+void balance_teams(){
+  while((team_A_counter - team_B_counter) != 1 || (team_A_counter - team_B_counter) != -1){
+    if(team_A_counter > team_B_counter){
+      a_to_b_team();
+    }
+    else{
+      b_to_a_team();
+    }
+  }
+  
+}
+
+void create_teams(){
+  char temp_a_team[512];
+  char temp_b_team[512];
+  for(int i = 0; i < (team_A_counter + team_B_counter); i++){
+    struct player_t p = player_list[i];
+    if(p.team == TEAM_A){
+      strcat(temp_a_team, p.name);
+      strcat(temp_a_team, " ");
+    }
+    else{
+      strcat(temp_b_team, p.name);
+      strcat(temp_b_team, " ");
+    }
+  }
+  strcpy(a_team, temp_a_team);
+  strcpy(b_team, temp_b_team);
+}
+
 int balance_names(char *name){
   for(int i = 0; i < team_A_counter + team_B_counter; i++){
     struct player_t temp_player = player_list[i];
@@ -93,14 +148,14 @@ void update_a_team(struct player_t *p, char *name){
   p -> name = name;
   player_list[team_A_counter + team_B_counter] = *p;
   team_A_counter += 1;
-  char temp[512];
-  if(strlen(a_team) > 0){
+  //char temp[512];
+  /*if(strlen(a_team) > 0){
     snprintf(temp, sizeof temp, "%s, %s", a_team, name);
   }
   else{
     snprintf(temp, sizeof temp, "%s", name);
   }
-  strcpy(a_team, temp);
+  strcpy(a_team, temp);*/
 }
 
 void update_b_team(struct player_t *p, char *name){
@@ -108,14 +163,14 @@ void update_b_team(struct player_t *p, char *name){
   p -> name = name;
   player_list[team_A_counter + team_B_counter] = *p;
   team_B_counter += 1;
-  char temp[512];
-  if(strlen(b_team) > 0){
+  //char temp[512];
+  /*if(strlen(b_team) > 0){
     snprintf(temp, sizeof temp, "%s, %s", b_team, name);
   }
   else{
     snprintf(temp, sizeof temp, "%s", name);
   }
-  strcpy(b_team, temp);
+  strcpy(b_team, temp);*/
 }
 
 void init_signals(void) {
@@ -147,17 +202,31 @@ struct player_t team_setup(int connfd){
 
   if(strcmp(tempTeam, "1") == 0){
     //update player list
-    player.team = TEAM_A;
+    if(team_A_counter < players_per_team){
+      player.team = TEAM_A;
+      update_a_team(&player, tempName);
+    }
+    else{
+      player.team = TEAM_B;
+      update_b_team(&player, tempName);
+    }
 
-    update_a_team(&player, tempName);
+    //update_a_team(&player, tempName);
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
   else if(strcmp(tempTeam, "2") == 0){
     //update player list
-    player.team = TEAM_B;
+    if(team_B_counter < players_per_team){
+      player.team = TEAM_B;
+      update_b_team(&player, tempName);
+    }
+    else{
+      player.team = TEAM_A;
+      update_a_team(&player, tempName);
+    }
 
-    update_b_team(&player, tempName);
+    //update_b_team(&player, tempName);
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
@@ -186,25 +255,19 @@ void *client_thread(void *arg)
     pthread_exit(0);
   }
 
+  if((team_A_counter + team_B_counter) > 9){
+    char *full_game = "Already 10 players joined";
+    write(connfd, full_game, strlen(full_game)+1);
+    close(connfd);
+    pthread_exit(0);
+  }
+
   int n;
   
   struct player_t player = team_setup(connfd);
 
   while (1)
   {
-    /*if ((n = read(connfd, recvBuff, sizeof recvBuff)) != 0)
-    {
-
-      // echo all input back to client
-      //write(connfd, sendBuff, strlen(sendBuff) + 1);
-
-    }
-    else
-    {
-      close(connfd);
-      pthread_exit(0);
-      }*/
-
     if(sec_counter > 0){
       //sends each client the newly updated player list
       char send[1024];
@@ -214,6 +277,7 @@ void *client_thread(void *arg)
       sleep(1);
     }
     else if(sec_counter == 0){
+      balance_teams();
       char *game_started = "GameIsStarting!";
       char gameStartAndMapName[1024];
       sprintf(gameStartAndMapName, "%s %s", game_started, mapName);
