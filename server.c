@@ -24,8 +24,9 @@ struct player_t
   pthread_mutex_t player_mutex;
   char *name;
   team_t team;
-  int r; // row; y-coordinate
-  int c; // column; x-coordinate
+  int x; // column
+  int y; // row
+  int score;
   int fd;
   char recvBuff[1024];
   char sendBuff[1024];
@@ -72,6 +73,9 @@ void init_player(struct player_t *p){
   pthread_mutex_init(&(p->player_mutex), NULL);
   p -> team = UNASSIGNED;
   p -> fd = -1;
+  p -> x = 0;
+  p -> y = 0;
+  p -> score = 0;
 }
 
 int balance_names(char *name){
@@ -194,7 +198,7 @@ void pop_message(void) {
     //printf("Acquiring lock on %s\n", p.name);
     pthread_mutex_lock(&(p.player_mutex));
     //printf("%s", "Lock acquired.\n");
-    
+    printf("    %c to %s\n", event.c, p.name);
     // Game Start
     if (event.c == 'G') {
       char *game_started = "GameIsStarting!";
@@ -202,7 +206,7 @@ void pop_message(void) {
       write(player_list[i].fd, p.sendBuff, strlen(p.sendBuff)+1);
     }
     else {
-      int n = sprintf(p.sendBuff, "Hey %s [%i]: %s hit %c", p.name, p.fd, event.player, event.c);
+      int n = sprintf(p.sendBuff, "%s: %s hit %c", p.name, event.player, event.c);
       write(player_list[i].fd, p.sendBuff, n+1);
     }
     pthread_mutex_unlock(&(p.player_mutex));
@@ -258,6 +262,9 @@ void *client_thread(void *arg)
   if(sec_counter <= 0){
     char *ghs = "Game has already started";
     write(connfd, ghs, strlen(ghs)+1);
+    pthread_mutex_lock(&team_array_mutex);
+    clientCount--;
+    pthread_mutex_unlock(&team_array_mutex);
     close(connfd);
     pthread_exit(0);
   }
@@ -336,9 +343,7 @@ int main(int argc, char *argv[])
   init_signals();
   sem_init(&next_event_space_remaining, 0, EVENT_QUEUE_SIZE);
   sem_init(&next_event_messages_waiting, 0, 0);
-  int p = 0;
-  sem_getvalue(&next_event_messages_waiting, &p);
-  printf("Init: %i\n", p);
+  
   int listenfd = socket(AF_INET, SOCK_STREAM, 0);
   
   struct sockaddr_in serv_addr;
@@ -372,6 +377,7 @@ int main(int argc, char *argv[])
       fprintf(stderr, "Server unable to create client_thread\n");
     }
     
+    pthread_mutex_lock(&team_array_mutex);
     clientCount += 1;
     if(clientCount == 1){
       pthread_t timer_thread;
@@ -380,8 +386,7 @@ int main(int argc, char *argv[])
 	  fprintf(stderr, "Server unable to create timer_thread\n");
 	}
     }
-    
-    sleep(1);
+    pthread_mutex_unlock(&team_array_mutex);
   }
 
 }

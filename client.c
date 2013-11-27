@@ -76,7 +76,7 @@ void control_test() {
         if ((pfds[0].revents & POLLIN) != 0) {
           // client
           int c = getch();
-          if (c == 81 || c == 113) {
+          if (c == 80 || c == 112) {
             printw("Exiting.\n");
             return;
           }
@@ -94,7 +94,7 @@ void control_test() {
           int c;
           ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
-            printw("Server pressed '%s'.\n", recvBuff);
+            printw("Server sent '%s'.\n", recvBuff);
           }
           else {
             printw("[Server closed connection.]\n");
@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
   loadMap(mapNameFromServer);
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
-  getch();/* Wait for user input */ 
+  //getch();/* Wait for user input */ 
   control_test();
   endwin();
   close(sockfd);
