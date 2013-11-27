@@ -1,3 +1,4 @@
+#include "map.h"
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -57,6 +58,7 @@ char recvBuff[1024];
 int clientCount = 0;
 
 int sec_counter = TIMER_START;
+int round_index = 0;
 
 struct player_t player_list[10];
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -141,14 +143,13 @@ struct player_t team_setup(int connfd){
   struct player_t player;
   init_player(&player);
 
-  int n;
-  /*printf("TS: Locking player %s\n", player.name);
+    /*printf("TS: Locking player %s\n", player.name);
   pthread_mutex_lock(&(player.player_mutex));
   printf("%s", "TS: Locked.\n");
   pthread_mutex_unlock(&(player.player_mutex));
   printf("%s", "TS: Released.\n");*/
 
-  n = read(connfd, player.recvBuff, sizeof player.recvBuff);
+  read(connfd, player.recvBuff, sizeof player.recvBuff);
 
   char tempName[10];
   char tempTeam[10];
@@ -178,9 +179,29 @@ struct player_t team_setup(int connfd){
 
   pthread_mutex_unlock(&(player.player_mutex));
   pthread_mutex_unlock(&team_array_mutex);
-  printf("Player mutex unlocked for %s\n", player.name);
 
   return player;
+}
+
+int is_attacker(const struct player_t p) {
+  return (p.team == TEAM_A && round_index == 1) || (p.team == TEAM_B && round_index == 2);
+}
+
+void process_message(struct player_t p, const struct event_t event) {
+    // Game Start
+    if (event.c == 'G') {
+      char *game_started = "GameIsStarting!";
+      sprintf(p.sendBuff, "%s %s", game_started, mapName);
+      write(p.fd, p.sendBuff, strlen(p.sendBuff)+1);
+    }
+    else if (event.c == 'S' || event.c == 's') {
+      int n = sprintf(p.sendBuff, "Draw at x%i y%i char%c colors...", 0, 0, 'A');
+      write(p.fd, p.sendBuff, n+1);
+    }
+    else {
+      int n = sprintf(p.sendBuff, "R %s: %s hit %c", p.name, event.player, event.c);
+      write(p.fd, p.sendBuff, n+1);
+    }
 }
 
 void pop_message(void) {
@@ -199,16 +220,7 @@ void pop_message(void) {
     pthread_mutex_lock(&(p.player_mutex));
     //printf("%s", "Lock acquired.\n");
     printf("    %c to %s\n", event.c, p.name);
-    // Game Start
-    if (event.c == 'G') {
-      char *game_started = "GameIsStarting!";
-      sprintf(p.sendBuff, "%s %s", game_started, mapName);
-      write(player_list[i].fd, p.sendBuff, strlen(p.sendBuff)+1);
-    }
-    else {
-      int n = sprintf(p.sendBuff, "%s: %s hit %c", p.name, event.player, event.c);
-      write(player_list[i].fd, p.sendBuff, n+1);
-    }
+    process_message(p, event);
     pthread_mutex_unlock(&(p.player_mutex));
   }
   
@@ -317,9 +329,11 @@ void *loading_thread(void *arg){
     sleep(1);
   }
 
-  printf("%s", "Adding Game Start Event to queue\n");
   push_message('G', SYSTEM_PLAYER);
-  printf("%s", "Game Start Event added.\n");
+  round_index++;
+  // FIXME load the map into the server here!
+  //loadMap(mapName);
+  //printf("%s\n", map);
 
   while (1) {
     pop_message();
@@ -360,7 +374,7 @@ int main(int argc, char *argv[])
 
   bind(listenfd, (struct sockaddr*)&serv_addr, sizeof serv_addr);
   listen(listenfd, 10);
-
+  
   /*if(sec_counter == 0){
     int connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
     char *ghs = "game has already started";

@@ -91,7 +91,6 @@ void control_test() {
         }
         if ((pfds[1].revents & POLLIN) != 0) {
           // server
-          int c;
           ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
             printw("Server sent '%s'.\n", recvBuff);
@@ -243,9 +242,9 @@ int main(int argc, char *argv[])
   snprintf(sendBuff, sizeof sendBuff, "%s %d", name, team);
 
   // send it
-  int writtenbytes = send_to_server();
+  send_to_server();
   // read reply
-  int readbytes = read_from_server();
+  read_from_server();
 
   //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
   sscanf(recvBuff, "%s", recvName);

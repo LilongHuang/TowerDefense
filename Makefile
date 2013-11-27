@@ -13,8 +13,8 @@ curses:curses.c map.o
 	c99 -Wall -o curses curses.c map.o -lncurses
 	chmod 770 curses.c
 
-server:server.c
-	c99 -Wall -pthread -D_GNU_SOURCE -o serve server.c
+server:server.c map.o
+	c99 -Wall -pthread -D_GNU_SOURCE -o serve server.c map.o -lncurses
 	chmod 770 serve
 
 play:client.c map.o
