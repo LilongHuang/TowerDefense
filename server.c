@@ -63,7 +63,7 @@ int round_index = 0;
 struct player_t player_list[10];
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-char mapName[1024];
+char mapPath[1024];
 
 struct event_t next_event[EVENT_QUEUE_SIZE];
 int event_count = 0;
@@ -191,7 +191,7 @@ void process_message(struct player_t p, const struct event_t event) {
     // Game Start
     if (event.c == 'G') {
       char *game_started = "GameIsStarting!";
-      sprintf(p.sendBuff, "%s %s", game_started, mapName);
+      sprintf(p.sendBuff, "%s %s", game_started, mapPath);
       write(p.fd, p.sendBuff, strlen(p.sendBuff)+1);
     }
     else if (event.c == 'S' || event.c == 's') {
@@ -332,7 +332,7 @@ void *loading_thread(void *arg){
   push_message('G', SYSTEM_PLAYER);
   round_index++;
   // FIXME load the map into the server here!
-  //loadMap(mapName);
+  loadMap(mapPath);
   //printf("%s\n", map);
 
   while (1) {
@@ -352,7 +352,7 @@ int main(int argc, char *argv[])
   
   SYSTEM_PLAYER.name = "System";
 
-  strncpy(mapName, argv[1], strlen(argv[1]) + 1);
+  strncpy(mapPath, argv[1], strlen(argv[1]) + 1);
   
   init_signals();
   sem_init(&next_event_space_remaining, 0, EVENT_QUEUE_SIZE);
