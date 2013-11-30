@@ -100,8 +100,7 @@ void init_player(struct player_t *p){
   p -> x = 3;
   p -> y = 3;
   p -> score = 0;
-  //p -> color = player_colors;
-  //player_colors++;
+  p -> player_color = 35;
 }
 
 void a_to_b_team(){
@@ -271,6 +270,8 @@ struct player_t team_setup(int connfd){
 
     snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
   }
+  
+  printf("%s has joined\n", player.name);  
 
   // echo all input back to client
   write(connfd, player.sendBuff, strlen(player.sendBuff) + 1);
@@ -283,6 +284,16 @@ struct player_t team_setup(int connfd){
 
 int is_attacker(const struct player_t p) {
   return (p.team == TEAM_A && round_index == 1) || (p.team == TEAM_B && round_index == 2);
+}
+
+char* getCharAt(int x, int y) {
+  // check if there's a player there
+  for (int i = 0; i < clientCount; i++) {
+    
+  }
+  // check if there's a bullet there
+  // else, get whatever's on the map
+  return "cA colorA1 colorB2"; // FIXME
 }
 
 // X and Y coordinates for this function are absolute
@@ -299,12 +310,13 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
   }
   else {
     // update former location
-    
-    p->x = x;
-    p->y = y;
+    char* out = getCharAt(p->x, p->y);
+    //sprintf(sendBuff,
     //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
     // update new location
-    sprintf(sendBuff, "Move %s to x%i y%i", p->name, p->x, p->y);
+    sprintf(sendBuff, "Move %s from x%i y%i\nto x%i y%i", p->name, p->x, p->y, x, y);
+    p->x = x;
+    p->y = y;
     return sendBuff;
   }
 }
@@ -359,11 +371,11 @@ char* process_message(struct event_t* event) {
     return NULL;
   }
   else if (c == 'O' || c == 'o') {
-    sprintf(sendBuff, "%s is at x%i y%i", p->name, p->x, p->y);
+    sprintf(sendBuff, "Render x%i y%i c%c colorA%i colorB%i", p->x, p->y, PLAYER_CHAR, 0, 1);
     return sendBuff;
   }
   else {
-    sprintf(sendBuff, "Render: %s hit %c", p->name, c);
+    sprintf(sendBuff, "Keystroke: %s hit %c", p->name, c);
     return sendBuff;
   }
   return NULL;
@@ -391,7 +403,15 @@ void pop_message(void) {
       pthread_mutex_lock(&(p->player_mutex));
       //printf("%s", "Lock acquired.\n");
       printf("    %c to %s\n", event->c, p->name);
-      write(p->fd, output, strlen(output)+1);
+      // print out newline-delimited instructions
+      char* saveptr;
+      char* nextLine = strtok_r(output, "\n", &saveptr);
+      do {
+        printf("%s\n", nextLine);
+        write(p->fd, nextLine, strlen(nextLine)+1);
+	usleep(1); // FIXME there's gotta be a better way to keep it
+	// from not seeing the second line of multiline messages...
+      } while((nextLine = strtok_r(NULL, "\n", &saveptr)) != NULL);
       pthread_mutex_unlock(&(p->player_mutex));
     }
   }
