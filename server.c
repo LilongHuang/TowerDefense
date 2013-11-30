@@ -34,6 +34,7 @@ struct player_t
   int score;
   int fd;
   int bullets;
+  //int player_color;
   char recvBuff[1024];
   char sendBuff[1024];
 };
@@ -61,6 +62,8 @@ struct event_t
   //int rows;
   //int cols;
 };
+
+int player_colors = 0;
 
 int team_A_counter = 0;
 int team_B_counter = 0;
@@ -97,13 +100,15 @@ void init_player(struct player_t *p){
   p -> x = 3;
   p -> y = 3;
   p -> score = 0;
+  //p -> color = player_colors;
+  //player_colors++;
 }
 
 void a_to_b_team(){
   for(int i = (team_A_counter + team_B_counter)-1; i > 0; i--){
-    struct player_t p = player_list[i];
-    if(p.team == TEAM_A){
-      p.team = TEAM_B;
+    struct player_t *p = &player_list[i];
+    if(p->team == TEAM_A){
+      p->team = TEAM_B;
       team_A_counter -= 1;
       team_B_counter += 1;
       break;
@@ -113,9 +118,9 @@ void a_to_b_team(){
 
 void b_to_a_team(){
   for(int i = (team_A_counter + team_B_counter)-1; i > 0; i--){
-    struct player_t p = player_list[i];
-    if(p.team == TEAM_B){
-      p.team = TEAM_A;
+    struct player_t *p = &player_list[i];
+    if(p->team == TEAM_B){
+      p->team = TEAM_A;
       team_A_counter += 1;
       team_B_counter -= 1;
       break;
@@ -124,7 +129,6 @@ void b_to_a_team(){
 }
 
 void balance_teams(){
-  balance_teams();
   //printf("teamA: %d | teamB: %d\n", team_A_counter, team_B_counter);
   if(team_A_counter > team_B_counter){
     while((team_A_counter - team_B_counter) != 1){
@@ -143,6 +147,7 @@ void balance_teams(){
 }
 
 void create_teams(){
+  balance_teams();
   char temp_a_team[512];
   char temp_b_team[512];
   for(int i = 0; i < (team_A_counter + team_B_counter); i++){
