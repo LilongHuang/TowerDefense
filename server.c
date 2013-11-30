@@ -15,7 +15,7 @@
 #include <signal.h>
 
 #define max_players 10
-#define TIMER_START 3
+#define TIMER_START 10
 #define EVENT_QUEUE_SIZE 20
 
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
