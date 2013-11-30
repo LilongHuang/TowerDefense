@@ -41,7 +41,7 @@ struct event_t
 {
   event_type_t type;
   int c;
-  char* player;
+  struct player_t* player;
   //int rows;
   //int cols;
 };
@@ -52,6 +52,7 @@ int team_B_counter = 0;
 char a_team[512];
 char b_team[512];
 
+// don't remove these, we need at least sendBuff now
 char sendBuff[1024];
 char recvBuff[1024];
 
@@ -75,8 +76,8 @@ void init_player(struct player_t *p){
   pthread_mutex_init(&(p->player_mutex), NULL);
   p -> team = UNASSIGNED;
   p -> fd = -1;
-  p -> x = 0;
-  p -> y = 0;
+  p -> x = 3;
+  p -> y = 3;
   p -> score = 0;
 }
 
@@ -187,21 +188,70 @@ int is_attacker(const struct player_t p) {
   return (p.team == TEAM_A && round_index == 1) || (p.team == TEAM_B && round_index == 2);
 }
 
-void process_message(struct player_t p, const struct event_t event) {
+// X and Y coordinates for this function are absolute
+// (because defenders can warp to absolute locations)
+char* try_attacker_move(struct player_t *p, int x, int y) {
+  char c = getCharOnMap(x, y);
+  if (x < 0 || x > 70 || y < 0 || y > 20) {
+    // nope, you're trying to move off the edge of the map
+    return NULL;
+  }
+  else if (c == '-' || c == '|' || c == '*' || c == '+' || (c >= '1' && c <='9') ) {
+    // nope, you're trying to move into a wall
+    return NULL;
+  }
+  else {
+    p->x = x;
+    p->y = y;
+    //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
+    sprintf(sendBuff, "Move %s to x%i y%i", p->name, p->x, p->y);
+    return sendBuff;
+  }
+}
+
+char* process_message(struct event_t* event) {
+    struct player_t *p = event->player;
+    char c = event->c;
     // Game Start
-    if (event.c == 'G') {
+    if (c == 'G') {
       char *game_started = "GameIsStarting!";
-      sprintf(p.sendBuff, "%s %s", game_started, mapPath);
-      write(p.fd, p.sendBuff, strlen(p.sendBuff)+1);
+      sprintf(sendBuff, "%s %s", game_started, mapPath);
+      return sendBuff;
     }
-    else if (event.c == 'S' || event.c == 's') {
-      int n = sprintf(p.sendBuff, "Draw at x%i y%i char%c colors...", 0, 0, 'A');
-      write(p.fd, p.sendBuff, n+1);
+    // move down
+    else if (c == 'S' || c == 's') {
+      // TODO: check team here
+      return try_attacker_move(p, p->x, p->y+1);
+    }
+    // move up
+    else if (c == 'W' || c == 'w') {
+      // TODO: check team here
+      return try_attacker_move(p, p->x, p->y-1);
+    }
+    // move left
+    else if (c == 'A' || c == 'a') {
+      // TODO: check team here
+      return try_attacker_move(p, p->x-1, p->y);
+    }
+    // move right
+    else if (c == 'D' || c == 'd') {
+      // TODO: check team here
+      return try_attacker_move(p, p->x+1, p->y);
+    }
+    // debug: show map in server log
+    else if (c == 'M' || c == 'm') {
+      printf("Map:\n%s\n", getMap());
+      return NULL;
+    }
+    else if (c == 'O' || c == 'o') {
+      sprintf(sendBuff, "%s is at x%i y%i", p->name, p->x, p->y);
+      return sendBuff;
     }
     else {
-      int n = sprintf(p.sendBuff, "R %s: %s hit %c", p.name, event.player, event.c);
-      write(p.fd, p.sendBuff, n+1);
+      sprintf(sendBuff, "Render: %s hit %c", p->name, c);
+      return sendBuff;
     }
+    return NULL;
 }
 
 void pop_message(void) {
@@ -209,19 +259,26 @@ void pop_message(void) {
   sem_wait(&next_event_messages_waiting);
   pthread_mutex_lock(&next_event_mutex);
   pthread_mutex_lock(&team_array_mutex);
- 
-  struct event_t event = next_event[0];
+
+  // accessing element zero by using the pointer to the start of the array.
+  // this is prrrrrobably a bad idea, but if I don't get a pointer to the event
+  // somehow, then all our changes will be reverted as soon as we return from
+  // this function
+  struct event_t* event = next_event;
+  char* output = process_message(event);
   
-  printf("  Sending message to %i player(s):\n", clientCount);
-  // process message
-  for (int i = 0; i < clientCount; i++) {
-    struct player_t p = player_list[i];
-    //printf("Acquiring lock on %s\n", p.name);
-    pthread_mutex_lock(&(p.player_mutex));
-    //printf("%s", "Lock acquired.\n");
-    printf("    %c to %s\n", event.c, p.name);
-    process_message(p, event);
-    pthread_mutex_unlock(&(p.player_mutex));
+  // if that message has any output, send it to all players
+  if (output != NULL) {
+    printf("  Sending message to %i player(s):\n", clientCount);
+    for (int i = 0; i < clientCount; i++) {
+      struct player_t *p = &(player_list[i]);
+      //printf("Acquiring lock on %s\n", p->name);
+      pthread_mutex_lock(&(p->player_mutex));
+      //printf("%s", "Lock acquired.\n");
+      printf("    %c to %s\n", event->c, p->name);
+      write(p->fd, output, strlen(output)+1);
+      pthread_mutex_unlock(&(p->player_mutex));
+    }
   }
   
   // slide all events over to fill empty spot
@@ -238,7 +295,7 @@ void pop_message(void) {
   sem_post(&next_event_space_remaining);
 }
 
-void push_message(const char m, const struct player_t player) {
+void push_message(const char m, struct player_t* player) {
   // WARNING: If this is updated to ever access more than the player's name,
   // update the system player's initialization appropriately!
 
@@ -249,8 +306,8 @@ void push_message(const char m, const struct player_t player) {
   struct event_t event;
   event.type = SHOOT;
   event.c = m;
-  event.player = player.name;
-  printf(">> Adding %c by %s\n", event.c, player.name);
+  event.player = player;
+  printf(">> Adding %c by %s\n", event.c, player->name);
   // put event on queue
   int event_count = 0;
   sem_getvalue(&next_event_messages_waiting, &event_count);
@@ -308,7 +365,7 @@ void *client_thread(void *arg)
 	  //printf("Writing %d bytes to buffer\n", n);
           //write(connfd, player.recvBuff, n);
 	  printf("Pushing %c onto event queue from %s\n", player.recvBuff[0], player.name);
-	  push_message(player.recvBuff[0], player);
+	  push_message(player.recvBuff[0], &player);
       }
       else {
 	// They disconnected-- release the client
@@ -329,11 +386,9 @@ void *loading_thread(void *arg){
     sleep(1);
   }
 
-  push_message('G', SYSTEM_PLAYER);
+  push_message('G', &SYSTEM_PLAYER);
   round_index++;
-  // FIXME load the map into the server here!
   loadMap(mapPath);
-  //printf("%s\n", map);
 
   while (1) {
     pop_message();

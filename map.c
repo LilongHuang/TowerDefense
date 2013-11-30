@@ -18,7 +18,7 @@ char attackerRespawn[1024];
 char defenderWin[1024];
 char defenderShots[1024];
 char defenderRespawn[1024];
-char map[1024];
+char map[2048];
 
 char castle[1024];
 char attacker[1024];
@@ -133,12 +133,18 @@ char *replace_str(char *str, char *orig, char *rep) {
   	return buffer;
 }
 
+char getCharOnMap(int x, int y) {
+	return map[x + 70 * y];
+}
+
 
 
 void loadMap(char mapFile[1024]) {
 	
 	FILE *file;
 	file = fopen(mapFile, "r");
+	// initialize map to empty
+	memset(&map, ' ', sizeof map);
 
 	if (file == NULL) {
 		perror ("Error opening file");
@@ -156,12 +162,11 @@ void loadMap(char mapFile[1024]) {
                                 strncpy(attacker, buffer, strlen(buffer)-1);
                         } else if (i == 4) {
 				strncpy(defender, buffer, strlen(buffer)-1);
-			} else if (i >= 7) {				
-				strncpy(map, buffer, sizeof buffer);
-				char* temp = &map[2];
-				char* temp2 = replace_str(temp, "%", "%%");
-				mvprintw(i - 6, 0, temp2);
-				
+			} else if (i >= 7) {
+				//printf("%zu|%s", strlen(&buffer[2]), &buffer[2]);
+				strncpy((char *)(map + 70 * (i-7)), &buffer[2], strlen(buffer)-2);
+				char* printable_line = replace_str(&buffer[2], "%", "%%");
+				mvprintw(i - 6, 0, printable_line);
 				//fprintf(stdout, "%s", getMap());
 			}
 			i++;
@@ -183,12 +188,12 @@ void loadMap(char mapFile[1024]) {
 		mvprintw(0, i, " ");
 	}
 
-	char* map = "map: ";
-  	char* author = "author: ";
-  	mvprintw(0, 0, map);
- 	mvprintw(0, strlen(map), getMapName());
-  	mvprintw(0, strlen(map) + strlen(getMapName()) + 2, author);
-  	mvprintw(0, strlen(map) + strlen(getMapName()) + strlen(author) + 1
+	char* mapText = "map: ";
+  	char* authorText = "author: ";
+  	mvprintw(0, 0, mapText);
+ 	mvprintw(0, strlen(mapText), getMapName());
+  	mvprintw(0, strlen(mapText) + strlen(getMapName()) + 2, authorText);
+  	mvprintw(0, strlen(mapText) + strlen(getMapName()) + strlen(authorText) + 2
                         , getAuthor());
 
 
