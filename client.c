@@ -98,35 +98,32 @@ void control_test() {
         if ((pfds[0].revents & POLLIN) != 0) {
           // client
           int c = getch();
-          if (c == 81 || c == 113) {
+          if (c == 80 || c == 112) {
             printw("Exiting.\n");
             return;
           }
           else if (iscntrl(c))
             printw("Client pressed '^%c'.\n", c + 64);
-          else
+          else {
             printw("Client pressed '%c'.\n", c);
             sendBuff[0] = c;
             sendBuff[1] = '\0';
             send_to_server();
-          refresh();
+          }
         }
         if ((pfds[1].revents & POLLIN) != 0) {
           // server
-          int c;
-          ssize_t size = read(sockfd, &c, 1);
+          ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
-            if ((c & 0xFF) != 0) {
-              printw("Server pressed '%c'.\n", c);
-            }
+            printw("Server sent '%s'.\n", recvBuff);
           }
           else {
             printw("[Server closed connection.]\n");
             return;
           }
-        refresh();
         }
     }
+    refresh();
   }
 }
 
@@ -267,9 +264,9 @@ int main(int argc, char *argv[])
   snprintf(sendBuff, sizeof sendBuff, "%s %d", name, team);
 
   // send it
-  int writtenbytes = send_to_server();
+  send_to_server();
   // read reply
-  int readbytes = read_from_server();
+  read_from_server();
 
   //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
   sscanf(recvBuff, "%s", recvName);
@@ -306,7 +303,7 @@ int main(int argc, char *argv[])
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
   load_players();
-  getch();/* Wait for user input */
+  control_test();
   endwin();
   close(sockfd);
   return 0;

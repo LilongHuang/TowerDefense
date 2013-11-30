@@ -37,4 +37,6 @@ int getDefenderShots();
 
 int getDefenderRespawn();
 
+char getCharOnMap();
+
 void loadMap(char[1024]);
