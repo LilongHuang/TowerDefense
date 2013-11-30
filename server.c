@@ -27,14 +27,14 @@ typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
 struct player_t
 {
   pthread_mutex_t player_mutex;
-  char *name;
+  char name[10];
   team_t team;
   int x; // column
   int y; // row
   int score;
   int fd;
   int bullets;
-  //int player_color;
+  int player_color;
   char recvBuff[1024];
   char sendBuff[1024];
 };
@@ -184,7 +184,7 @@ int balance_names(char *name){
 
 void update_a_team(struct player_t *p, char *name){
   while(balance_names(name) == 0){}
-  p -> name = name;
+  strcpy(p -> name, name);
   player_list[team_A_counter + team_B_counter] = *p;
   team_A_counter += 1;
   //char temp[512];
@@ -199,7 +199,7 @@ void update_a_team(struct player_t *p, char *name){
 
 void update_b_team(struct player_t *p, char *name){
   while(balance_names(name) == 0){}
-  p -> name = name;
+  strcpy(p -> name, name);
   player_list[team_A_counter + team_B_counter] = *p;
   team_B_counter += 1;
   //char temp[512];
@@ -531,7 +531,7 @@ int main(int argc, char *argv[])
     return 1;
   }
   
-  SYSTEM_PLAYER.name = "System";
+  strcpy(SYSTEM_PLAYER.name, "System");
 
   strncpy(mapPath, argv[1], strlen(argv[1]) + 1);
   
