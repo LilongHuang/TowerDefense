@@ -18,6 +18,9 @@
 #define TIMER_START 10
 #define EVENT_QUEUE_SIZE 20
 
+#define PLAYER_CHAR 'O'
+
+
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
 
 struct player_t
@@ -29,11 +32,23 @@ struct player_t
   int y; // row
   int score;
   int fd;
+  int bullets;
   char recvBuff[1024];
   char sendBuff[1024];
 };
 
 struct player_t SYSTEM_PLAYER;
+
+struct bullet_t
+{
+  struct player_t* owner;
+  int direction; // 0: up, 1: right, 2: down, 3: left
+  int x; // column
+  int y; // row
+};
+
+struct bullet_t bullet_list[1024];
+pthread_mutex_t bullet_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef enum {MOVE_REL, MOVE_ABS, SHOOT} event_type_t;
 
@@ -66,6 +81,8 @@ pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 char mapPath[1024];
 
+// do not use directly unless you know what you're doing!
+// use push_message; it'll make your life much easier
 struct event_t next_event[EVENT_QUEUE_SIZE];
 int event_count = 0;
 pthread_mutex_t next_event_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -201,57 +218,75 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
     return NULL;
   }
   else {
+    // update former location
+    
     p->x = x;
     p->y = y;
     //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
+    // update new location
     sprintf(sendBuff, "Move %s to x%i y%i", p->name, p->x, p->y);
     return sendBuff;
   }
 }
 
+char* shoot(struct player_t* p, int direction) {
+  // shoot!
+  return NULL;
+}
+
+// returns a char pointer to the first char of a message
+// that is sent to all players. this message should be the
+// instructions to the client on how to update their screen
+// to reflect this event occurring.
+
+// REMEMBER: NO GAME LOGIC IN THE CLIENT!
 char* process_message(struct event_t* event) {
-    struct player_t *p = event->player;
-    char c = event->c;
-    // Game Start
-    if (c == 'G') {
-      char *game_started = "GameIsStarting!";
-      sprintf(sendBuff, "%s %s", game_started, mapPath);
-      return sendBuff;
-    }
-    // move down
-    else if (c == 'S' || c == 's') {
-      // TODO: check team here
-      return try_attacker_move(p, p->x, p->y+1);
-    }
-    // move up
-    else if (c == 'W' || c == 'w') {
-      // TODO: check team here
-      return try_attacker_move(p, p->x, p->y-1);
-    }
-    // move left
-    else if (c == 'A' || c == 'a') {
-      // TODO: check team here
-      return try_attacker_move(p, p->x-1, p->y);
-    }
-    // move right
-    else if (c == 'D' || c == 'd') {
-      // TODO: check team here
-      return try_attacker_move(p, p->x+1, p->y);
-    }
-    // debug: show map in server log
-    else if (c == 'M' || c == 'm') {
-      printf("Map:\n%s\n", getMap());
-      return NULL;
-    }
-    else if (c == 'O' || c == 'o') {
-      sprintf(sendBuff, "%s is at x%i y%i", p->name, p->x, p->y);
-      return sendBuff;
-    }
-    else {
-      sprintf(sendBuff, "Render: %s hit %c", p->name, c);
-      return sendBuff;
-    }
+  struct player_t *p = event->player;
+  char c = event->c;
+  // Game Start
+  if (c == 'G') {
+    char *game_started = "GameIsStarting!";
+    sprintf(sendBuff, "%s %s", game_started, mapPath);
+    return sendBuff;
+  }
+  // move down
+  else if (c == 'S' || c == 's') {
+    // TODO: check team here
+    return try_attacker_move(p, p->x, p->y+1);
+  }
+  // move up
+  else if (c == 'W' || c == 'w') {
+    // TODO: check team here
+    return try_attacker_move(p, p->x, p->y-1);
+  }
+  // move left
+  else if (c == 'A' || c == 'a') {
+    // TODO: check team here
+    return try_attacker_move(p, p->x-1, p->y);
+  }
+  // move right
+  else if (c == 'D' || c == 'd') {
+    // TODO: check team here
+    return try_attacker_move(p, p->x+1, p->y);
+  }
+  else if (c == 'I' || c == 'i') {
+    return shoot(p, 0);
+  }
+  // handle other shoot cases
+  // debug: show map in server log
+  else if (c == 'M' || c == 'm') {
+    printf("Map:\n%s\n", getMap());
     return NULL;
+  }
+  else if (c == 'O' || c == 'o') {
+    sprintf(sendBuff, "%s is at x%i y%i", p->name, p->x, p->y);
+    return sendBuff;
+  }
+  else {
+    sprintf(sendBuff, "Render: %s hit %c", p->name, c);
+    return sendBuff;
+  }
+  return NULL;
 }
 
 void pop_message(void) {
