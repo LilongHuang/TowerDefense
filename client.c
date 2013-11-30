@@ -62,23 +62,22 @@ void loading_screen(){
 }
 
 void load_players(){
-  mvprintw(30, 0, a_team);
-  mvprintw(31, 0, b_team);
-  char* a_token = strtok(a_team, " ");
-  char* b_token = strtok(b_team, " ");
+  refresh();
+  char* a_token = strtok(a_team, ",");
   int a_pos = 1;
-  int b_pos = 11;
   while (a_token) {
     mvprintw(a_pos, 71, a_token);
     a_pos += 1;
-    a_token = strtok(NULL, " ");
+    a_token = strtok(NULL, ",");
   }
+
+  char* b_token = strtok(b_team, ",");
+  int b_pos = 11;
   while (b_token) {
     mvprintw(b_pos, 71, b_token);
     b_pos += 1;
-    b_token = strtok(NULL, " ");
+    b_token = strtok(NULL, ",");
   }
-
   refresh();
 }
 

@@ -98,6 +98,7 @@ void b_to_a_team(){
 }
 
 void balance_teams(){
+  balance_teams();
   //printf("teamA: %d | teamB: %d\n", team_A_counter, team_B_counter);
   if(team_A_counter > team_B_counter){
     while((team_A_counter - team_B_counter) != 1){
@@ -122,15 +123,16 @@ void create_teams(){
     struct player_t p = player_list[i];
     if(p.team == TEAM_A){
       strcat(temp_a_team, p.name);
-      strcat(temp_a_team, " ");
+      strcat(temp_a_team, ",");
     }
     else{
       strcat(temp_b_team, p.name);
-      strcat(temp_b_team, " ");
+      strcat(temp_b_team, ",");
     }
   }
   strcpy(a_team, temp_a_team);
   strcpy(b_team, temp_b_team);
+  printf("%s\n%s\n", a_team, b_team);
 }
 
 int balance_names(char *name){
@@ -355,18 +357,17 @@ void pop_message(void) {
 
 void *loading_thread(void *arg){
   for(int i = TIMER_START; i >= -1; i--){
-    printf("%d\n", i);
     if(i == 0){
-      balance_teams();
+      //balance_teams();
       create_teams();
     }
     sec_counter = i;
     sleep(1);
   }
   
-  /*while (1) {
+  while (1) {
     pop_message();
-    }*/
+  }
   
   return NULL;
 }
