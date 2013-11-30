@@ -23,6 +23,8 @@ char sendBuff[1024];
 int sockfd; // file descriptor for socket to server
 
 char mapNameFromServer[1024];
+char a_team[512];
+char b_team[512];
 
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
@@ -49,7 +51,7 @@ void loading_screen(){
     char gisFromServer[1024];
     char* gameStart = "GameIsStarting!";
     if(read_from_server() != 0){
-      sscanf(recvBuff, "%s %s", gisFromServer, mapNameFromServer);
+      sscanf(recvBuff, "%s %s %s %s", gisFromServer, mapNameFromServer, a_team, b_team);
       mvprintw(1, 12, recvBuff);
       if (strcmp(gisFromServer, gameStart) == 0) {
         stop_loading_screen = 0;
@@ -60,7 +62,24 @@ void loading_screen(){
 }
 
 void load_players(){
+  mvprintw(30, 0, a_team);
+  mvprintw(31, 0, b_team);
+  char* a_token = strtok(a_team, " ");
+  char* b_token = strtok(b_team, " ");
+  int a_pos = 1;
+  int b_pos = 11;
+  while (a_token) {
+    mvprintw(a_pos, 71, a_token);
+    a_pos += 1;
+    a_token = strtok(NULL, " ");
+  }
+  while (b_token) {
+    mvprintw(b_pos, 71, b_token);
+    b_pos += 1;
+    b_token = strtok(NULL, " ");
+  }
 
+  refresh();
 }
 
 void control_test() {

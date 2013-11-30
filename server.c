@@ -15,7 +15,7 @@
 
 #define max_players 10
 #define players_per_team 5
-#define TIMER_START 30
+#define TIMER_START 10
 #define EVENT_QUEUE_SIZE 20
 
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
@@ -98,15 +98,21 @@ void b_to_a_team(){
 }
 
 void balance_teams(){
-  while((team_A_counter - team_B_counter) != 1 || (team_A_counter - team_B_counter) != -1){
-    if(team_A_counter > team_B_counter){
+  //printf("teamA: %d | teamB: %d\n", team_A_counter, team_B_counter);
+  if(team_A_counter > team_B_counter){
+    while((team_A_counter - team_B_counter) != 1){
+      if((team_A_counter - team_B_counter) == 0)
+	break;
       a_to_b_team();
     }
-    else{
+  }
+  else if(team_A_counter < team_B_counter){
+    while((team_B_counter - team_A_counter) != 1){
+      if((team_A_counter - team_B_counter) == 0)
+        break;
       b_to_a_team();
     }
   }
-  
 }
 
 void create_teams(){
@@ -277,14 +283,15 @@ void *client_thread(void *arg)
       sleep(1);
     }
     else if(sec_counter == 0){
-      balance_teams();
+      //balance_teams();
+      //printf("TeamA: %s\nTeamB: %s\n", a_team, b_team);
       char *game_started = "GameIsStarting!";
       char gameStartAndMapName[1024];
-      sprintf(gameStartAndMapName, "%s %s", game_started, mapName);
+      sprintf(gameStartAndMapName, "%s %s %s %s", game_started, mapName, a_team, b_team);
       write(connfd, gameStartAndMapName, strlen(gameStartAndMapName)+1);
     }
     else{
-      if ((n = read(connfd, recvBuff, sizeof recvBuff)) != 0)
+      /*if ((n = read(connfd, recvBuff, sizeof recvBuff)) != 0)
 	{
 	  // echo all input back to client
 	  write(connfd, recvBuff, n);
@@ -312,7 +319,7 @@ void *client_thread(void *arg)
 	close(connfd);
 	//player_count--;
 	pthread_exit(0);
-      }
+	}*/
     }
   }
   return NULL;
@@ -347,14 +354,19 @@ void pop_message(void) {
 }
 
 void *loading_thread(void *arg){
-  for(int i = TIMER_START; i >= 0; i--){
+  for(int i = TIMER_START; i >= -1; i--){
+    printf("%d\n", i);
+    if(i == 0){
+      balance_teams();
+      create_teams();
+    }
     sec_counter = i;
     sleep(1);
   }
   
-  while (1) {
+  /*while (1) {
     pop_message();
-  }
+    }*/
   
   return NULL;
 }
