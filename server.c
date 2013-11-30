@@ -16,7 +16,7 @@
 
 #define max_players 10
 #define players_per_team 5
-#define TIMER_START 10
+#define TIMER_START 5
 #define EVENT_QUEUE_SIZE 20
 
 #define PLAYER_CHAR 'O'
@@ -63,7 +63,7 @@ struct event_t
   //int cols;
 };
 
-int player_colors = 0;
+int player_colors =11;
 
 int team_A_counter = 0;
 int team_B_counter = 0;
@@ -100,8 +100,8 @@ void init_player(struct player_t *p){
   p -> x = 3;
   p -> y = 3;
   p -> score = 0;
-  //p -> color = player_colors;
-  //player_colors++;
+  p -> player_color = player_colors;
+  player_colors++;
 }
 
 void a_to_b_team(){
@@ -153,11 +153,15 @@ void create_teams(){
   for(int i = 0; i < (team_A_counter + team_B_counter); i++){
     struct player_t p = player_list[i];
     if(p.team == TEAM_A){
-      strcat(temp_a_team, p.name);
+      char build_color_player[15];
+      sprintf(build_color_player, "%d%s", p.player_color, p.name);
+      strcat(temp_a_team, build_color_player);
       strcat(temp_a_team, ",");
     }
     else{
-      strcat(temp_b_team, p.name);
+      char build_color_player[15];
+      sprintf(build_color_player, "%d%s", p.player_color, p.name);
+      strcat(temp_b_team, build_color_player);
       strcat(temp_b_team, ",");
     }
   }

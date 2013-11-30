@@ -20,6 +20,7 @@ char* name = NULL;
 char recvName[10];
 char recvBuff[1024];
 char sendBuff[1024];
+int player_color = 0;
 int sockfd; // file descriptor for socket to server
 
 char mapNameFromServer[1024];
@@ -61,11 +62,40 @@ void loading_screen(){
   }
 }
 
+void init_color_pairs(){
+  init_pair(11, COLOR_BLACK, 45);//color 1
+  init_pair(12, COLOR_BLACK, 155);//color 2
+  init_pair(13, COLOR_BLACK, 65);//color 3
+  init_pair(14, COLOR_BLACK, 75);//color 4
+  init_pair(15, COLOR_BLACK, 85);//color 5
+  init_pair(16, COLOR_BLACK, 95);//color 6
+  init_pair(17, COLOR_BLACK, 105);//color 7
+  init_pair(18, COLOR_BLACK, 115);//color 8
+  init_pair(19, COLOR_BLACK, 125);//color 9
+  init_pair(20, COLOR_BLACK, 135);//color 10
+}
+
 void load_players(){
   refresh();
+
+  init_color_pairs();//initializes color pairs for up to 10 players
+
   char* a_token = strtok(a_team, ",");
   int a_pos = 1;
+  //attron(COLOR_PAIR(11));
   while (a_token) {
+    char c_pair[4];
+    char c_pair2[4];
+    sprintf(c_pair, "%c", a_token[0]);
+    sprintf(c_pair2, "%c", a_token[1]);
+    strcat(c_pair, c_pair2);
+    int cp = atoi(c_pair);
+    attron(COLOR_PAIR(cp));
+    a_token += 2;
+
+    if(strcmp(recvName, a_token) == 0)
+      player_color = cp;
+
     mvprintw(a_pos, 71, a_token);
     a_pos += 1;
     a_token = strtok(NULL, ",");
@@ -74,6 +104,18 @@ void load_players(){
   char* b_token = strtok(b_team, ",");
   int b_pos = 11;
   while (b_token) {
+    char c_pair[4];
+    char c_pair2[4];
+    sprintf(c_pair, "%c", b_token[0]);
+    sprintf(c_pair2, "%c", b_token[1]);
+    strcat(c_pair, c_pair2);
+    int cp = atoi(c_pair);
+    attron(COLOR_PAIR(cp));
+    b_token += 2;
+
+    if(strcmp(recvName, b_token) == 0)
+      player_color = cp;
+
     mvprintw(b_pos, 71, b_token);
     b_pos += 1;
     b_token = strtok(NULL, ",");
