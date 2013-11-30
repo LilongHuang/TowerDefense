@@ -78,6 +78,7 @@ void load_players(){
     b_pos += 1;
     b_token = strtok(NULL, ",");
   }
+  mvprintw(25, 0, "");
   refresh();
 }
 
