@@ -41,6 +41,7 @@ struct player_t
 
 struct player_t SYSTEM_PLAYER;
 
+const char BULLET_CHARS[4] = {'^', '>', 'v', '<'};
 struct bullet_t
 {
   struct player_t* owner;
@@ -51,13 +52,14 @@ struct bullet_t
 
 struct bullet_t bullet_list[1024];
 pthread_mutex_t bullet_array_mutex = PTHREAD_MUTEX_INITIALIZER;
+int bullet_count;
 
 typedef enum {MOVE_REL, MOVE_ABS, SHOOT} event_type_t;
 
 struct event_t
 {
   event_type_t type;
-  int c;
+  char c;
   struct player_t* player;
   //int rows;
   //int cols;
@@ -75,7 +77,7 @@ char b_team[512];
 char sendBuff[1024];
 char recvBuff[1024];
 
-int clientCount = 0;
+int client_count = 0;
 
 int sec_counter = TIMER_START;
 int round_index = 0;
@@ -83,10 +85,17 @@ int round_index = 0;
 struct player_t player_list[10];
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// map filename, as string
 char mapPath[1024];
 
-// do not use directly unless you know what you're doing!
-// use push_message; it'll make your life much easier
+struct tile_t {
+  char c;
+  int fg_color;
+  int bg_color;
+};
+
+// do not use ANY of these directly unless you know what you're doing!
+// all input should be handled via cases in process_message().
 struct event_t next_event[EVENT_QUEUE_SIZE];
 int event_count = 0;
 pthread_mutex_t next_event_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -151,16 +160,16 @@ void create_teams(){
   char temp_a_team[512];
   char temp_b_team[512];
   for(int i = 0; i < (team_A_counter + team_B_counter); i++){
-    struct player_t p = player_list[i];
-    if(p.team == TEAM_A){
+    struct player_t* p = &player_list[i];
+    if(p->team == TEAM_A){
       char build_color_player[15];
-      sprintf(build_color_player, "%d%s", p.player_color, p.name);
+      sprintf(build_color_player, "%d%s", p->player_color, p->name);
       strcat(temp_a_team, build_color_player);
       strcat(temp_a_team, ",");
     }
     else{
       char build_color_player[15];
-      sprintf(build_color_player, "%d%s", p.player_color, p.name);
+      sprintf(build_color_player, "%d%s", p->player_color, p->name);
       strcat(temp_b_team, build_color_player);
       strcat(temp_b_team, ",");
     }
@@ -172,9 +181,9 @@ void create_teams(){
 
 int balance_names(char *name){
   for(int i = 0; i < team_A_counter + team_B_counter; i++){
-    struct player_t temp_player = player_list[i];
+    struct player_t* temp_player = &player_list[i];
 
-    if(strcmp(name, temp_player.name) == 0){
+    if(strcmp(name, temp_player->name) == 0){
       int rn = rand()%9000%1000;
       char rn_string[128];
       sprintf(rn_string, "%d", rn);
@@ -291,14 +300,45 @@ int is_attacker(const struct player_t p) {
   return (p.team == TEAM_A && round_index == 1) || (p.team == TEAM_B && round_index == 2);
 }
 
-char* getCharAt(int x, int y) {
+int getBackgroundColor(int x, int y) {
+  return 0;
+}
+
+struct tile_t getTileAt(struct tile_t* t, int x, int y) {
+  t->c = ' ';
+  t->fg_color = 1;
+  t->bg_color = getBackgroundColor(x, y);
+  
   // check if there's a player there
-  for (int i = 0; i < clientCount; i++) {
-    
+  for (int i = 0; i < client_count; i++) {
+    struct player_t* p = &player_list[i];
+    if (p->x == x && p->y == y) {
+      if (t->c == ' ') {
+        t->c = PLAYER_CHAR;
+        t->fg_color = p->player_color;
+      }
+      else if (t->c == PLAYER_CHAR) {
+        // two players there; assign it team color
+        t->bg_color = p->player_color;
+      }
+    }
   }
+  
   // check if there's a bullet there
+  pthread_mutex_lock(&bullet_array_mutex);
+  for (int i = 0; i < bullet_count; i++) {
+    struct bullet_t* b = &(bullet_list[i]);
+    if (b->x == x && b->y == y) {
+      t->c = BULLET_CHARS[b->direction];
+      t->fg_color = b->owner->player_color;
+      return *t;
+    }
+  }
+  pthread_mutex_unlock(&bullet_array_mutex);
+  
   // else, get whatever's on the map
-  return "cA colorA1 colorB2"; // FIXME
+  t->c = getCharOnMap(x, y);
+  return *t;
 }
 
 // X and Y coordinates for this function are absolute
@@ -315,13 +355,19 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
   }
   else {
     // update former location
-    char* out = getCharAt(p->x, p->y);
+    struct tile_t oldt;
+    struct tile_t newt;
+    int oldx = p->x;
+    int oldy = p->y;
+    p->x = x;
+    p->y = y;
+    getTileAt(&oldt, oldx, oldy);
+    getTileAt(&newt, x, y);
     //sprintf(sendBuff,
     //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
     // update new location
-    sprintf(sendBuff, "Move %s from x%i y%i\nto x%i y%i", p->name, p->x, p->y, x, y);
-    p->x = x;
-    p->y = y;
+    sprintf(sendBuff, "Render char%c at x%i y%i\nRender char%c at x%i y%i", oldt.c, oldx, oldy, newt.c, player_list[0].x, player_list[0].y);
+
     return sendBuff;
   }
 }
@@ -364,7 +410,10 @@ char* process_message(struct event_t* event) {
   // move right
   else if (c == 'D' || c == 'd') {
     // TODO: check team here
-    return try_attacker_move(p, p->x+1, p->y);
+    char* ch = try_attacker_move(p, p->x+1, p->y);
+    
+    printf("Event: %d, %d. Player list: %d, %d\n",event->player->x, event->player->y, player_list[0].x, player_list[0].y);
+    return ch;
   }
   else if (c == 'I' || c == 'i') {
     return shoot(p, 0);
@@ -401,9 +450,9 @@ void pop_message(void) {
   
   // if that message has any output, send it to all players
   if (output != NULL) {
-    printf("  Sending message to %i player(s):\n", clientCount);
-    for (int i = 0; i < clientCount; i++) {
-      struct player_t *p = &(player_list[i]);
+    printf("  Sending message to %i player(s):\n", client_count);
+    for (int i = 0; i < client_count; i++) {
+      struct player_t *p = &player_list[i];
       //printf("Acquiring lock on %s\n", p->name);
       pthread_mutex_lock(&(p->player_mutex));
       //printf("%s", "Lock acquired.\n");
@@ -472,13 +521,15 @@ void *client_thread(void *arg)
     char *ghs = "Game has already started";
     write(connfd, ghs, strlen(ghs)+1);
     pthread_mutex_lock(&team_array_mutex);
-    clientCount--;
+    client_count--;
     pthread_mutex_unlock(&team_array_mutex);
     close(connfd);
     pthread_exit(0);
   }
 
   if((team_A_counter + team_B_counter) > 9){
+    // what if the max isn't ten players any more?
+    // hard-coding things like this is bad practice.
     char *full_game = "Already 10 players joined";
     write(connfd, full_game, strlen(full_game)+1);
     close(connfd);
@@ -598,8 +649,8 @@ int main(int argc, char *argv[])
     }
     
     pthread_mutex_lock(&team_array_mutex);
-    clientCount += 1;
-    if(clientCount == 1){
+    client_count += 1;
+    if(client_count == 1){
       pthread_t timer_thread;
       if (pthread_create(&timer_thread, NULL, loading_thread, &connfd) != 0)
 	{

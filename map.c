@@ -164,15 +164,15 @@ void loadMap(char mapFile[1024]) {
 				strncpy(defender, buffer, strlen(buffer)-1);
 			} else if (i >= 7) {
 				//printf("%zu|%s", strlen(&buffer[2]), &buffer[2]);
-				strncpy((char *)(map + 70 * (i-7)), &buffer[2], strlen(buffer)-2);
+				strncpy((char *)(map + 70 * (i-7)), &buffer[2], strlen(buffer)-3);
 				char* printable_line = replace_str(&buffer[2], "%", "%%");
 				mvprintw(i - 6, 0, printable_line);
-				//fprintf(stdout, "%s", getMap());
 			}
 			i++;
 			if (i > 27) break;
 		}
 		fclose(file);
+		//fprintf(stdout, "%s", getMap());
 	};
 
 	init_pair(1, COLOR_BLACK, COLOR_GREEN);
