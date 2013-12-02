@@ -25,19 +25,38 @@ char castle[1024];
 char attacker[1024];
 char defender[1024];
 
-int respawnPointCount = 0;
+int attackerRespawnPointCount = 0;
+int defenderRespawnPointCount = 0;
+int wallCount = 0;
 
-struct respawn_location {
+struct percent_wall {
 	int x;
 	int y;
 };
 
-struct respawn_location respawn_location_list[1024];
-
-struct row_t {
-	char content[1024];
+struct round_counter {
+	int x;
+	int y;
 };
 
+struct attacker_respawn_location {
+	int x;
+	int y;
+};
+
+struct defender_respawn_location {
+	int x;
+	int y;
+};
+
+struct row_t {
+        char content[1024];
+};
+
+struct round_counter round_counter_location[10];
+struct percent_wall percent_wall_location[10];
+struct attacker_respawn_location attacker_respawn_location_list[1024];
+struct defender_respawn_location defender_respawn_location_list[1024];
 struct row_t list_row[20];
 
 char* getMap() {
@@ -149,18 +168,40 @@ char *replace_str(char *str, char *orig, char *rep) {
   	return buffer;
 }
 
+
 char getCharOnMap(int x, int y) {
-	return map[x + 70 * y];
+	return list_row[y].content[x];
 }
 
-//randomly get a respawn point
-void assignRespwanPoint(int col, int row) {
+
+//randomly get a respawn pointi
+
+struct attacker_respawn_location getAttackerRespawnPoint() {
 	srand(time(NULL));
         int ran = rand();
-        int rand_capped = ran % respawnPointCount;  //between 0 respawnPointCount
-	col = respawn_location_list[rand_capped].x;
-	row = respawn_location_list[rand_capped].y;
+        int rand_capped = ran % (attackerRespawnPointCount - 1);  //between 0 respawnPointCount
+	return attacker_respawn_location_list[rand_capped];
 }
+
+struct defender_respawn_location getDefenderRespawnPoint() {
+	srand(time(NULL));
+        int ran = rand();
+        int rand_capped = ran % (defenderRespawnPointCount - 1);  //between 0 respawnPointCount
+        return defender_respawn_location_list[rand_capped];
+}
+
+struct percent_wall getPercentWall() {
+	return percent_wall_location[0];
+}
+
+struct round_counter getRoundCounter() {
+        return round_counter_location[0];
+}
+
+void setCharOnMap(int x, int y, char replacement) {
+	list_row[y].content[x] = replacement;
+}
+
 
 void createColorPair() {
 	init_pair(0, COLOR_WHITE, COLOR_BLACK);
@@ -219,7 +260,7 @@ void teamInfoMap() {
 void loadMap(char mapFile[1024]) {
 	
 	FILE *file;
-	
+		
 	file = fopen(mapFile, "r");
 	// initialize map to empty
 	memset(&map, ' ', sizeof map);
@@ -254,12 +295,29 @@ void loadMap(char mapFile[1024]) {
 				for (int j = 0; j < 70; j++) {
 					int actualLocation = j + 2;
 					if (buffer[actualLocation] == '@') {
-						respawn_location_list[respawnPointCount].x = j;
-						respawn_location_list[respawnPointCount].y = i - 7;	
-						respawnPointCount++;
+						attacker_respawn_location_list[attackerRespawnPointCount].x = j;
+						attacker_respawn_location_list[attackerRespawnPointCount].y = i - 7;	
+						attackerRespawnPointCount++;
 					} 
+
+					if (buffer[actualLocation] == '*' || buffer[actualLocation] == '+') {
+						defender_respawn_location_list[defenderRespawnPointCount].x = j;
+                                                defender_respawn_location_list[defenderRespawnPointCount].y = i - 7;
+                                                defenderRespawnPointCount++;
+					}
+
+					if (buffer[actualLocation] == '%') {
+						percent_wall_location[0].x = j;
+						percent_wall_location[0].y = i - 7;
+					}
+
+					if (buffer[actualLocation] == '#') {
+						round_counter_location[0].x = j;
+						round_counter_location[0].y = i - 7;
+					}
 				}
 				mvprintw(i - 6, 0, list_row[mapRow].content);
+
 			}
 			i++;
 			if (i > 27) break;

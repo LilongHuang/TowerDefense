@@ -15,20 +15,39 @@ char castle[1024];
 char attacker[1024];
 char defender[1024];
 
-int respawnPointCount;
+int attackerRespawnPointCount;
+int defenderRespawnPointCount;
+int wallCount;
 
-struct respawn_location {
+struct attacker_respawn_location {
 	int x;
 	int y;
+};
+
+struct defender_respawn_location {
+        int x;
+        int y;
 };
 
 struct row_t {
         char content[1024];
 };
 
-struct row_t list_row[20];
+struct percent_wall {
+        int x;
+        int y;
+};
 
-struct respawn_location respawn_location_list[1024];
+struct round_counter {
+        int x;
+        int y;
+};
+
+struct round_counter round_counter_location[10];
+struct percent_wall percent_wall_location[10];
+struct attacker_respawn_location attacker_respawn_location_list[1024];
+struct defender_respawn_location defender_respawn_location_list[1024];
+struct row_t list_row[20];
 
 char* getMap();
 
@@ -54,7 +73,17 @@ int getDefenderRespawn();
 
 char getCharOnMap(int, int);
 
-void assignRespwanPoint(int, int);
+struct attacker_respawn_location getAttackerRespawnPoint();
+
+struct defender_respawn_location getDefenderRespawnPoint();
+
+struct percent_wall getPercentWall();
+
+struct round_counter getRoundCounter();
+
+void setCharOnMap(int , int , char*);
+
+void createColorPair();
 
 void initBoard();
 
