@@ -15,6 +15,15 @@ char castle[1024];
 char attacker[1024];
 char defender[1024];
 
+int respawnPointCount;
+
+struct respawn_location {
+	int x;
+	int y;
+};
+
+struct respawn_location respawn_location_list[1024];
+
 char* getMap();
 
 char* getMapName();
@@ -37,6 +46,8 @@ int getDefenderShots();
 
 int getDefenderRespawn();
 
-char getCharOnMap();
+char getCharOnMap(int, int);
+
+void assignRespwanPoint(int, int);
 
 void loadMap(char[1024]);

@@ -24,4 +24,4 @@ defenders survive 180s shots 4 respawn 2s
 16       @5                                             5
 17                              55555
 18                               @
-19
+19                                                                

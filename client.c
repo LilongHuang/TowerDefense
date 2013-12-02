@@ -27,6 +27,20 @@ char mapNameFromServer[1024];
 char a_team[512];
 char b_team[512];
 
+struct player_t {
+  char name[10];
+  int x;
+  int y;
+  int player_color;
+  int symbol;
+};
+
+struct player_t Aplayer_list[5];
+struct player_t Bplayer_list[5];
+
+int A_Player_Count = 0;
+int B_Player_Count = 0;
+
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
   return write(sockfd, sendBuff, strlen(sendBuff)+1);
@@ -82,6 +96,7 @@ void load_players(){
 
   char* a_token = strtok(a_team, ",");
   int a_pos = 1;
+
   //attron(COLOR_PAIR(11));
   while (a_token) {
     char c_pair[4];
@@ -98,6 +113,12 @@ void load_players(){
 
     mvprintw(a_pos, 71, a_token);
     a_pos += 1;
+    struct player_t p;
+    strcpy(p.name, a_token);
+    p.player_color = cp;
+    p.symbol = 0;
+    Aplayer_list[A_Player_Count] = p;
+    A_Player_Count++;
     a_token = strtok(NULL, ",");
   }
 
@@ -118,9 +139,32 @@ void load_players(){
 
     mvprintw(b_pos, 71, b_token);
     b_pos += 1;
+    struct player_t p;
+    strcpy(p.name, b_token);
+    p.player_color = cp;
+    p.symbol = 1;
+    Bplayer_list[B_Player_Count] = p;
+    B_Player_Count++;
+
     b_token = strtok(NULL, ",");
   }
   mvprintw(25, 0, "");
+  refresh();
+}
+
+void place_players() {
+  for (int i = 0; i < A_Player_Count; i++) {
+    struct player_t p = Aplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(i + 1, 0, "A");
+  }
+
+  for (int i = 0; i < B_Player_Count; i++) {
+    struct player_t p = Bplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(i + 1, 2, "B");
+  }
+
   refresh();
 }
 
@@ -346,6 +390,7 @@ int main(int argc, char *argv[])
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
   load_players();
+  place_players();
   control_test();
   endwin();
   close(sockfd);

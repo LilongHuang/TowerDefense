@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <ncurses.h>
+#include <time.h>
 
 char buffer[1024];
 char mapName[1024];
@@ -23,6 +24,15 @@ char map[2048];
 char castle[1024];
 char attacker[1024];
 char defender[1024];
+
+int respawnPointCount = 0;
+
+struct respawn_location {
+	int x;
+	int y;
+};
+
+struct respawn_location respawn_location_list[1024];
 
 char* getMap() {
 	return map;
@@ -137,6 +147,14 @@ char getCharOnMap(int x, int y) {
 	return map[x + 70 * y];
 }
 
+//randomly get a respawn point
+void assignRespwanPoint(int x, int y) {
+	srand(time(NULL));
+        int ran = rand();
+        int rand_capped = ran % respawnPointCount;  //between 0 respawnPointCount
+	x = respawn_location_list[rand_capped].x;
+	y = respawn_location_list[rand_capped].y;
+}
 
 
 void loadMap(char mapFile[1024]) {
@@ -166,6 +184,16 @@ void loadMap(char mapFile[1024]) {
 				//printf("%zu|%s", strlen(&buffer[2]), &buffer[2]);
 				strncpy((char *)(map + 70 * (i-7)), &buffer[2], strlen(buffer)-2);
 				char* printable_line = replace_str(&buffer[2], "%", "%%");
+				for (int j = 0; j < 70; j++) {
+					int actualLocation = j + 2;
+					if (buffer[actualLocation] == '@') {
+						respawn_location_list[respawnPointCount].x = j;
+						respawn_location_list[respawnPointCount].y = i - 7;	
+						//printf("%d\n", respawn_location_list[respawnPointCount].x);
+                                		//printf("%d\n", respawn_location_list[respawnPointCount].y);
+						respawnPointCount++;
+					} 
+				}
 				mvprintw(i - 6, 0, printable_line);
 				//fprintf(stdout, "%s", getMap());
 			}

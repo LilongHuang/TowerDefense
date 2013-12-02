@@ -23,12 +23,14 @@
 
 
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
+//typedef enum {A, D, UNASSIGNED_SYMBOL} symbol_t;
 
 struct player_t
 {
   pthread_mutex_t player_mutex;
   char name[10];
   team_t team;
+  //symbol_t symbol;
   int x; // column
   int y; // row
   int score;
@@ -101,6 +103,7 @@ void init_player(struct player_t *p){
   p -> y = 3;
   p -> score = 0;
   p -> player_color = player_colors;
+  //p -> symbol = UNASSIGNED_SYMBOL;
   player_colors++;
 }
 
@@ -157,12 +160,14 @@ void create_teams(){
       sprintf(build_color_player, "%d%s", p.player_color, p.name);
       strcat(temp_a_team, build_color_player);
       strcat(temp_a_team, ",");
+      //p.symbol = A;
     }
     else{
       char build_color_player[15];
       sprintf(build_color_player, "%d%s", p.player_color, p.name);
       strcat(temp_b_team, build_color_player);
       strcat(temp_b_team, ",");
+      //p.symbol = D;
     }
   }
   strcpy(a_team, temp_a_team);
