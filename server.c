@@ -302,7 +302,21 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
   
   bool modified = false;
   
+  
+  // check if there's a bullet there
+  pthread_mutex_lock(&bullet_array_mutex);
+  for (int i = 0; i < bullet_count; i++) {
+    struct bullet_t* b = &(bullet_list[i]);
+    if (b->x == x && b->y == y) {
+      t->c = BULLET_CHARS[b->direction];
+      t->fg_color = b->owner->player_color;
+      modified = true;
+    }
+  }
+  pthread_mutex_unlock(&bullet_array_mutex);
+  
   // check if there's a player there
+  // (after bullet, so it'll have higher priority to be drawn over bullets)
   for (int i = 0; i < client_count; i++) {
     struct player_t* p = &player_list[i];
     printf("Checking player %s (%d, %d) against %d, %d\n", p->name, p->x, p->y, x, y);
@@ -321,18 +335,6 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
       }
     }
   }
-  
-  // check if there's a bullet there
-  pthread_mutex_lock(&bullet_array_mutex);
-  for (int i = 0; i < bullet_count; i++) {
-    struct bullet_t* b = &(bullet_list[i]);
-    if (b->x == x && b->y == y) {
-      t->c = BULLET_CHARS[b->direction];
-      t->fg_color = b->owner->player_color;
-      modified = true;
-    }
-  }
-  pthread_mutex_unlock(&bullet_array_mutex);
   
   // else, get whatever's on the map
   if (!modified) {
@@ -445,13 +447,15 @@ char* update_bullets(void) {
       // TODO decrement strength of castle walls
       target = '&';
       setCharOnMap(target, b->x, b->y);
+      // TODO write a "castle wall percentage" calculator in map.c
+      // then call it here and add its output to the output of the function
       destroyed = true;
     }
     
     // collide with players
     for (int player_index = 0; player_index < client_count; player_index++) {
       struct player_t* player = &player_list[player_index];
-      if (player->x == b->x && player->y == b->y) {
+      if (player->x == b->x && player->y == b->y && player->team != b->owner->team) {
 	// award owner kill points
         b->owner->score += 20;
 	// TODO force player to respawn
