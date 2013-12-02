@@ -137,6 +137,9 @@ char getCharOnMap(int x, int y) {
 	return map[x + 70 * y];
 }
 
+void setCharOnMap(char c, int x, int y) {
+	map[x + 70 * y] = c;
+}
 
 
 void loadMap(char mapFile[1024]) {

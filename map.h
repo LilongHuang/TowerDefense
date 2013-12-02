@@ -18,25 +18,20 @@ char defender[1024];
 char* getMap();
 
 char* getMapName();
-
 char* getAuthor();
 
 int getCastleStrength();
-
 int getCastleTouch();
 
 int getAttackerWin();
-
 int getAttackerShots();
-
 int getAttackerRespawn();
 
 int getDefenderWin();
-
 int getDefenderShots(); 
-
 int getDefenderRespawn();
 
 char getCharOnMap();
+void setCharOnMap();
 
 void loadMap(char[1024]);

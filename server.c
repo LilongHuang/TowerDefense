@@ -19,6 +19,7 @@
 #define players_per_team 5
 #define TIMER_START 5
 #define EVENT_QUEUE_SIZE 20
+#define MILLIS_BETWEEN_UPDATES 500
 
 #define PLAYER_CHAR 'O'
 
@@ -103,6 +104,8 @@ int event_count = 0;
 pthread_mutex_t next_event_mutex = PTHREAD_MUTEX_INITIALIZER;
 sem_t next_event_space_remaining;
 sem_t next_event_messages_waiting;
+
+// ===========================================================
 
 void init_player(struct player_t *p){
   pthread_mutex_init(&(p->player_read_mutex), NULL);
@@ -371,6 +374,37 @@ char* shoot(struct player_t* p, int direction) {
   return NULL;
 }
 
+void destroy_bullet(int start) {
+  for (int i = start + 1; i < bullet_count; i++) {
+    bullet_list[i-1] = bullet_list[i];
+  }
+  bullet_count--;
+}
+
+void update_bullets(void) {
+  // advance all bullets forward
+  pthread_mutex_lock(&bullet_array_mutex);
+  for (int i = 0; i < bullet_count; i++) {
+    struct bullet_t* b = &(bullet_list[i]);
+    switch (b->direction) {
+      case 0: b->y--; break;
+      case 1: b->x++; break;
+      case 2: b->y++; break;
+      case 3: b->x--; break;
+    }
+    // destroy bullets beyond the boundaries of the map
+    if (b->x < 0 || b->x > 70 || b->y < 0 || b->y > 20) {
+      destroy_bullet(i);
+      i--;
+    }
+    // collide with walls
+    
+    // collide with players
+    
+  }
+  pthread_mutex_unlock(&bullet_array_mutex);
+}
+
 // returns a char pointer to the first char of a message
 // that is sent to all players. this message should be the
 // instructions to the client on how to update their screen
@@ -380,8 +414,11 @@ char* shoot(struct player_t* p, int direction) {
 char* process_message(struct event_t* event) {
   struct player_t *p = event->player;
   char c = event->c;
+  if (c == 'U') {
+    update_bullets();
+  }
+  else if (c == 'G') {
   // Game Start
-  if (c == 'G') {
     char *game_started = "GameIsStarting!";
     sprintf(sendBuff, "%s %s %s %s", game_started, mapPath, a_team, b_team);
     return sendBuff;
@@ -462,12 +499,11 @@ void pop_message(void) {
   }
   
   // slide all events over to fill empty spot
-  int last_event_index = 0;
-  sem_getvalue(&next_event_messages_waiting, &last_event_index);
-  printf("Last event is #%i\n", last_event_index);
-  for (int i = 0; i < last_event_index + 1; i++) {
+  printf("Last event is #%i\n", event_count);
+  for (int i = 0; i < event_count + 1; i++) {
     next_event[i] = next_event[i+1];
   }
+  event_count--;
 
   // release resources
   pthread_mutex_unlock(&team_array_mutex);
@@ -482,6 +518,7 @@ void push_message(const char m, struct player_t* player) {
   // capture event queue, and prepare to add a new event
   sem_wait(&next_event_space_remaining);
   pthread_mutex_lock(&next_event_mutex);
+  printf(" - %s locking\n", player->name);
   // initialize event to put on queue
   struct event_t event;
   event.type = SHOOT;
@@ -489,15 +526,12 @@ void push_message(const char m, struct player_t* player) {
   event.player = player;
   printf(">> Adding %c by %s\n", event.c, player->name);
   // put event on queue
-  int event_count = 0;
-  sem_getvalue(&next_event_messages_waiting, &event_count);
   next_event[event_count] = event;
+  event_count++;
   // release resources
-  pthread_mutex_unlock(&next_event_mutex);
   sem_post(&next_event_messages_waiting);
-  event_count = 0;
-  sem_getvalue(&next_event_messages_waiting, &event_count);
   printf("Completed push. Next event is #%i\n", event_count);
+  pthread_mutex_unlock(&next_event_mutex);
 }
 
 void *client_thread(void *arg)
@@ -573,6 +607,14 @@ void *client_thread(void *arg)
   return NULL;
 }
 
+void* update_thread(void *arg) {
+  while (1) {
+    printf("%s", "Update thread pushing update\n");
+    push_message('U', &SYSTEM_PLAYER);
+    usleep(MILLIS_BETWEEN_UPDATES);
+  }
+}
+
 void *loading_thread(void *arg){
   for(int i = TIMER_START; i >= -1; i--){
     if(i == 0){
@@ -586,6 +628,12 @@ void *loading_thread(void *arg){
   push_message('G', &SYSTEM_PLAYER);
   round_index++;
   loadMap(mapPath);
+  
+  pthread_t upd_thread;
+    if (pthread_create(&upd_thread, NULL, update_thread, NULL) != 0)
+    {
+      fprintf(stderr, "Server unable to create update_thread\n");
+    }
 
   while (1) {
     pop_message();
