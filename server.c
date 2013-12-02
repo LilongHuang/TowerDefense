@@ -161,6 +161,9 @@ void create_teams(){
       strcat(temp_a_team, build_color_player);
       strcat(temp_a_team, ",");
       //p.symbol = A;
+      //assignRespwanPoint(p.x, p.y);
+      //printf("%d%d\n", p.x, p.y);
+      //printf("%d%d\n", p.x, p.y);
     }
     else{
       char build_color_player[15];
@@ -585,7 +588,7 @@ int main(int argc, char *argv[])
 
   bind(listenfd, (struct sockaddr*)&serv_addr, sizeof serv_addr);
   listen(listenfd, 10);
-  
+
   /*if(sec_counter == 0){
     int connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
     char *ghs = "game has already started";
@@ -601,7 +604,7 @@ int main(int argc, char *argv[])
     {
       fprintf(stderr, "Server unable to create client_thread\n");
     }
-    
+
     pthread_mutex_lock(&team_array_mutex);
     clientCount += 1;
     if(clientCount == 1){

@@ -22,6 +22,12 @@ struct respawn_location {
 	int y;
 };
 
+struct row_t {
+        char content[1024];
+};
+
+struct row_t list_row[20];
+
 struct respawn_location respawn_location_list[1024];
 
 char* getMap();
@@ -49,5 +55,9 @@ int getDefenderRespawn();
 char getCharOnMap(int, int);
 
 void assignRespwanPoint(int, int);
+
+void initBoard();
+
+void teamInfoMap();
 
 void loadMap(char[1024]);

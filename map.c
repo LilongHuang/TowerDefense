@@ -19,7 +19,7 @@ char attackerRespawn[1024];
 char defenderWin[1024];
 char defenderShots[1024];
 char defenderRespawn[1024];
-char map[2048];
+char map[1024];
 
 char castle[1024];
 char attacker[1024];
@@ -33,6 +33,12 @@ struct respawn_location {
 };
 
 struct respawn_location respawn_location_list[1024];
+
+struct row_t {
+	char content[1024];
+};
+
+struct row_t list_row[20];
 
 char* getMap() {
 	return map;
@@ -148,18 +154,72 @@ char getCharOnMap(int x, int y) {
 }
 
 //randomly get a respawn point
-void assignRespwanPoint(int x, int y) {
+void assignRespwanPoint(int col, int row) {
 	srand(time(NULL));
         int ran = rand();
         int rand_capped = ran % respawnPointCount;  //between 0 respawnPointCount
-	x = respawn_location_list[rand_capped].x;
-	y = respawn_location_list[rand_capped].y;
+	col = respawn_location_list[rand_capped].x;
+	row = respawn_location_list[rand_capped].y;
 }
 
+void createColorPair() {
+	init_pair(0, COLOR_WHITE, COLOR_BLACK);
+	init_pair(1, COLOR_BLACK, COLOR_GREEN);
+	init_pair(2, COLOR_BLACK, COLOR_RED);
+	init_pair(3, COLOR_BLACK, COLOR_BLUE);
+	init_pair(4, COLOR_BLACK, COLOR_WHITE);
+	init_pair(5, COLOR_BLACK, COLOR_CYAN);
+}
+
+void initBoard(){
+  createColorPair();
+  //background team A (red)
+  for(int i = 70; i < 80; i++){
+    for(int j = 1; j <= 10; j++){
+      attron(COLOR_PAIR(2));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //background team B (blue)
+  for(int i = 70; i < 80; i++){
+    for(int j = 11; j <= 20; j++){
+      attron(COLOR_PAIR(3));
+      mvprintw(j, i, " ");
+    }
+  }
+
+  //description area (scrollable)
+  for(int i = 0; i < 80; i++){
+    for(int j = 21; j < 24; j++){
+      attron(COLOR_PAIR(4));
+      mvprintw(j, i, " ");
+    }
+  }
+
+}
+
+void teamInfoMap() {
+        attron(COLOR_PAIR(5));
+
+        int i = 0;
+        for (i = 0; i < 80; i++) {
+                mvprintw(0, i, " ");
+        }
+
+        char* mapText = "map: ";
+        char* authorText = "author: ";
+        mvprintw(0, 0, mapText);
+        mvprintw(0, strlen(mapText), getMapName());
+        mvprintw(0, strlen(mapText) + strlen(getMapName()) + 2, authorText);
+        mvprintw(0, strlen(mapText) + strlen(getMapName()) + strlen(authorText) + 2
+                        , getAuthor());
+}
 
 void loadMap(char mapFile[1024]) {
 	
 	FILE *file;
+	
 	file = fopen(mapFile, "r");
 	// initialize map to empty
 	memset(&map, ' ', sizeof map);
@@ -181,49 +241,31 @@ void loadMap(char mapFile[1024]) {
                         } else if (i == 4) {
 				strncpy(defender, buffer, strlen(buffer)-1);
 			} else if (i >= 7) {
-				//printf("%zu|%s", strlen(&buffer[2]), &buffer[2]);
-				strncpy((char *)(map + 70 * (i-7)), &buffer[2], strlen(buffer)-2);
+				int mapRow = i - 7;
 				char* printable_line = replace_str(&buffer[2], "%", "%%");
+				printable_line = replace_str(printable_line, "\n", " ");
+				
+				struct row_t row;
+				strncpy(row.content, printable_line, strlen(printable_line) + 1);
+				list_row[mapRow] = row;
+				while (strlen(list_row[mapRow].content) < 70) {
+					strncat(list_row[mapRow].content, " ", 1);
+				}
 				for (int j = 0; j < 70; j++) {
 					int actualLocation = j + 2;
 					if (buffer[actualLocation] == '@') {
 						respawn_location_list[respawnPointCount].x = j;
 						respawn_location_list[respawnPointCount].y = i - 7;	
-						//printf("%d\n", respawn_location_list[respawnPointCount].x);
-                                		//printf("%d\n", respawn_location_list[respawnPointCount].y);
 						respawnPointCount++;
 					} 
 				}
-				mvprintw(i - 6, 0, printable_line);
-				//fprintf(stdout, "%s", getMap());
+				mvprintw(i - 6, 0, list_row[mapRow].content);
 			}
 			i++;
 			if (i > 27) break;
 		}
 		fclose(file);
 	};
-
-	init_pair(1, COLOR_BLACK, COLOR_GREEN);
-  	init_pair(2, COLOR_BLACK, COLOR_RED);
-  	init_pair(3, COLOR_BLACK, COLOR_BLUE);
-  	init_pair(4, COLOR_BLACK, COLOR_WHITE);
-  	init_pair(5, COLOR_BLACK, COLOR_CYAN);
-	
-	attron(COLOR_PAIR(5));
-
-	int i = 0;
-	for (i = 0; i < 80; i++) {
-		mvprintw(0, i, " ");
-	}
-
-	char* mapText = "map: ";
-  	char* authorText = "author: ";
-  	mvprintw(0, 0, mapText);
- 	mvprintw(0, strlen(mapText), getMapName());
-  	mvprintw(0, strlen(mapText) + strlen(getMapName()) + 2, authorText);
-  	mvprintw(0, strlen(mapText) + strlen(getMapName()) + strlen(authorText) + 2
-                        , getAuthor());
-
 
 	/*	
 	fprintf(stdout, "%s\n", getMapName());

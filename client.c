@@ -168,15 +168,19 @@ void place_players() {
   refresh();
 }
 
+void Moving(char receiveBuffer[1024]) {
+   
+}
+
 void control_test() {
   scrollok(stdscr, 1);       // allow the window to scroll
   noecho();                  // don't echo characters
   cbreak();                  // give me characters immediately
   refresh();                 // update the screen
+  standend();
   struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
   while (1) {
     switch (poll(pfds, 2, -1)) {
-
       case -1:
         perror("poll");
         exit(EXIT_FAILURE);
@@ -192,7 +196,8 @@ void control_test() {
           else if (iscntrl(c))
             printw("Client pressed '^%c'.\n", c + 64);
           else {
-            printw("Client pressed '%c'.\n", c);
+            //printw("Client pressed '%c'.\n", c);
+	    
             sendBuff[0] = c;
             sendBuff[1] = '\0';
             send_to_server();
@@ -202,7 +207,11 @@ void control_test() {
           // server
           ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
-            printw("Server sent '%s'.\n", recvBuff);
+            mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
+	    for(int i = 0; i < 20; i++) {
+	      mvprintw(i + 1, 0, list_row[i].content);
+	    }	   
+	     
           }
           else {
             printw("[Server closed connection.]\n");
@@ -295,39 +304,6 @@ void read_socket()
   }
 }
 
-void initBoard(){
-  init_pair(1, COLOR_BLACK, COLOR_GREEN);
-  init_pair(2, COLOR_BLACK, COLOR_RED);
-  init_pair(3, COLOR_BLACK, COLOR_BLUE);
-  init_pair(4, COLOR_BLACK, COLOR_WHITE);
-  init_pair(5, COLOR_BLACK, COLOR_CYAN);
-
-  //background team A (red)
-  for(int i = 70; i < 80; i++){
-    for(int j = 1; j <= 10; j++){
-      attron(COLOR_PAIR(2));
-      mvprintw(j, i, " ");
-    }
-  }
-
-  //background team B (blue)
-  for(int i = 70; i < 80; i++){
-    for(int j = 11; j <= 20; j++){
-      attron(COLOR_PAIR(3));
-      mvprintw(j, i, " ");
-    }
-  }
-
-  //description area (scrollable)
-  for(int i = 0; i < 80; i++){
-    for(int j = 21; j < 24; j++){
-      attron(COLOR_PAIR(4));
-      mvprintw(j, i, " ");
-    }
-  }
-
-}
-
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -387,6 +363,7 @@ int main(int argc, char *argv[])
   loading_screen();
   start_color();
   loadMap(mapNameFromServer);
+  teamInfoMap();
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
   load_players();
