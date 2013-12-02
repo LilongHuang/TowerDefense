@@ -97,6 +97,8 @@ struct tile_t {
   int bg_color;
 };
 
+pthread_mutex_t map_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 // do not use ANY of these directly unless you know what you're doing!
 // all input should be handled via cases in process_message().
 struct event_t next_event[EVENT_QUEUE_SIZE];
@@ -336,17 +338,29 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
   return *t;
 }
 
+bool isCastleChar(char c) {
+  return c == '-' || c == '|' || c == '+' || c == '*' || c == '/' || c == '\\';
+}
+bool isDestroyableCoverChar(char c) {
+  return c >= '1' && c <='9';
+}
+bool isCoverChar(char c) {
+  return c == '0' || isDestroyableCoverChar(c);
+}
+
 // X and Y coordinates for this function are absolute
 // (because defenders can warp to absolute locations)
 char* try_attacker_move(struct player_t *p, int x, int y) {
+  pthread_mutex_lock(&map_mutex);
   char c = getCharOnMap(x, y);
+  char* retval;
   if (x < 0 || x > 70 || y < 0 || y > 20) {
     // nope, you're trying to move off the edge of the map
-    return NULL;
+    retval = NULL;
   }
-  else if (c == '-' || c == '|' || c == '*' || c == '+' || (c >= '1' && c <='9') ) {
+  else if (isCastleChar(c) || isCoverChar(c) ) {
     // nope, you're trying to move into a wall
-    return NULL;
+    retval = NULL;
   }
   else {
     // update former location
@@ -365,8 +379,10 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
             oldt.c, oldx, oldy, oldt.fg_color, oldt.bg_color,
             newt.c, player_list[0].x, player_list[0].y, newt.fg_color, newt.bg_color);
 
-    return sendBuff;
+    retval = sendBuff;
   }
+  pthread_mutex_unlock(&map_mutex);
+  return retval;
 }
 
 char* shoot(struct player_t* p, int direction) {
@@ -383,6 +399,7 @@ void destroy_bullet(int start) {
 
 void update_bullets(void) {
   // advance all bullets forward
+  pthread_mutex_lock(&map_mutex);
   pthread_mutex_lock(&bullet_array_mutex);
   for (int i = 0; i < bullet_count; i++) {
     struct bullet_t* b = &(bullet_list[i]);
@@ -392,17 +409,43 @@ void update_bullets(void) {
       case 2: b->y++; break;
       case 3: b->x--; break;
     }
+    bool destroyed = false;
     // destroy bullets beyond the boundaries of the map
     if (b->x < 0 || b->x > 70 || b->y < 0 || b->y > 20) {
-      destroy_bullet(i);
-      i--;
+      destroyed = true;
     }
-    // collide with walls
+    
+    char target = getCharOnMap(b->x, b->y);
+    
+    // collide with destroyables
+    
+    // cover tiles
+    if (target == '0') {
+      destroyed = true;
+    }
+    else if (isDestroyableCoverChar(target)) {
+      // check to see if attacker bullet
+      target--;
+      if (!isDestroyableCoverChar(target)) {
+        target = ' ';
+      }
+      setCharOnMap(target, b->x, b->y);
+      destroyed = true;
+    }
+    // castle tiles
+    else if (isCastleChar(target)) {
+      // check to see if defender bullet
+    }
     
     // collide with players
     
+    if (destroyed) {
+      destroy_bullet(i);
+      i--;
+    }
   }
   pthread_mutex_unlock(&bullet_array_mutex);
+  pthread_mutex_unlock(&map_mutex);
 }
 
 // returns a char pointer to the first char of a message
