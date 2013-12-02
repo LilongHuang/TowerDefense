@@ -43,6 +43,19 @@ int read_from_server() {
   return read(sockfd, recvBuff, sizeof(recvBuff)-1);
 }
 
+void init_color_pairs(){
+  init_pair(11, COLOR_BLACK, 45);//color 1
+  init_pair(12, COLOR_BLACK, 155);//color 2
+  init_pair(13, COLOR_BLACK, 65);//color 3
+  init_pair(14, COLOR_BLACK, 75);//color 4
+  init_pair(15, COLOR_BLACK, 85);//color 5
+  init_pair(16, COLOR_BLACK, 95);//color 6
+  init_pair(17, COLOR_BLACK, 105);//color 7
+  init_pair(18, COLOR_BLACK, 115);//color 8
+  init_pair(19, COLOR_BLACK, 125);//color 9
+  init_pair(20, COLOR_BLACK, 135);//color 10
+}
+
 void loading_screen(){
   int stop_loading_screen = 1;
   mvprintw(0, 0, recvName);//printing name revieved from server after balancing names
@@ -60,26 +73,45 @@ void loading_screen(){
      }
     refresh();/* Print it on to the real screen */
   }
+  clear();
 }
 
-void init_color_pairs(){
-  init_pair(11, COLOR_BLACK, 45);//color 1
-  init_pair(12, COLOR_BLACK, 155);//color 2
-  init_pair(13, COLOR_BLACK, 65);//color 3
-  init_pair(14, COLOR_BLACK, 75);//color 4
-  init_pair(15, COLOR_BLACK, 85);//color 5
-  init_pair(16, COLOR_BLACK, 95);//color 6
-  init_pair(17, COLOR_BLACK, 105);//color 7
-  init_pair(18, COLOR_BLACK, 115);//color 8
-  init_pair(19, COLOR_BLACK, 125);//color 9
-  init_pair(20, COLOR_BLACK, 135);//color 10
+void display_teams(){
+  mvprintw(0, 0, "Team A (red):");
+  mvprintw(0, 20, "Team B (blue):");
+
+  char temp_a_team[512];
+  strcpy(temp_a_team, a_team);
+
+  char* a_token = strtok(temp_a_team, ",");
+  int a_pos = 1;
+  while (a_token) {
+    a_token += 2;
+    mvprintw(a_pos, 0, a_token);
+    a_pos += 1;
+    a_token = strtok(NULL, ",");
+  }
+
+  char temp_b_team[512];
+  strcpy(temp_b_team, b_team);
+
+  char* b_token = strtok(temp_b_team, ",");
+  int b_pos = 1;
+  while (b_token) {
+    b_token += 2;
+    mvprintw(b_pos, 15, b_token);
+    b_pos += 1;
+    b_token = strtok(NULL, ",");
+  }
+  refresh();
+
+  sleep(5);
+  clear();
 }
 
 void load_players(){
   refresh();
-
-  init_color_pairs();//initializes color pairs for up to 10 players
-
+  init_color_pairs();
   char* a_token = strtok(a_team, ",");
   int a_pos = 1;
   //attron(COLOR_PAIR(11));
@@ -98,6 +130,7 @@ void load_players(){
 
     mvprintw(a_pos, 71, a_token);
     a_pos += 1;
+
     a_token = strtok(NULL, ",");
   }
 
@@ -320,34 +353,19 @@ int main(int argc, char *argv[])
     return 0;
   }
 
-  /*char newName[10];
-  char newTeam[10];
-  char teamCount[10];
-  sscanf(recvBuff, "%s %s %s", newName, newTeam, teamCount);
-  printf("%s %s %s\n", newName, newTeam, teamCount);*/
-
-  //printf("%s", recvBuff);
-
-  // example: send preconstructed string to server
-  //char* arbitrary_test_value = "This was a triumph.";
-  // send it
-  //writtenbytes = send_str_to_server(arbitrary_test_value);
-  // read reply
-  //readbytes = read_from_server();
-  //printf("Bytes written: %d. Bytes read: %d.\n%s\n", writtenbytes, readbytes, recvBuff);
-
-  //FIX-ME
-  //need to add loop to refresh loading screen for T-Minus 30 seconds
-  //for when new users are joining the game
   initscr();
   loading_screen();
+  display_teams();
+
   start_color();
+  initscr();
   loadMap(mapNameFromServer);
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
   load_players();
   control_test();
   endwin();
+
   close(sockfd);
   return 0;
 }
