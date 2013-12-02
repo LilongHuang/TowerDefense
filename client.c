@@ -27,6 +27,20 @@ char mapNameFromServer[1024];
 char a_team[512];
 char b_team[512];
 
+struct player_t {
+  char name[10];
+  int x;
+  int y;
+  int player_color;
+  int symbol;
+};
+
+struct player_t Aplayer_list[5];
+struct player_t Bplayer_list[5];
+
+int A_Player_Count = 0;
+int B_Player_Count = 0;
+
 // Sends whatever string's in sendBuff to the server.
 int send_to_server() {
   return write(sockfd, sendBuff, strlen(sendBuff)+1);
@@ -114,6 +128,7 @@ void load_players(){
   init_color_pairs();
   char* a_token = strtok(a_team, ",");
   int a_pos = 1;
+
   //attron(COLOR_PAIR(11));
   while (a_token) {
     char c_pair[4];
@@ -130,7 +145,12 @@ void load_players(){
 
     mvprintw(a_pos, 71, a_token);
     a_pos += 1;
-
+    struct player_t p;
+    strcpy(p.name, a_token);
+    p.player_color = cp;
+    p.symbol = 0;
+    Aplayer_list[A_Player_Count] = p;
+    A_Player_Count++;
     a_token = strtok(NULL, ",");
   }
 
@@ -151,10 +171,37 @@ void load_players(){
 
     mvprintw(b_pos, 71, b_token);
     b_pos += 1;
+    struct player_t p;
+    strcpy(p.name, b_token);
+    p.player_color = cp;
+    p.symbol = 1;
+    Bplayer_list[B_Player_Count] = p;
+    B_Player_Count++;
+
     b_token = strtok(NULL, ",");
   }
   mvprintw(25, 0, "");
   refresh();
+}
+
+void place_players() {
+  for (int i = 0; i < A_Player_Count; i++) {
+    struct player_t p = Aplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(i + 1, 0, "A");
+  }
+
+  for (int i = 0; i < B_Player_Count; i++) {
+    struct player_t p = Bplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(i + 1, 2, "B");
+  }
+
+  refresh();
+}
+
+void Moving(char receiveBuffer[1024]) {
+   
 }
 
 void control_test() {
@@ -162,10 +209,10 @@ void control_test() {
   noecho();                  // don't echo characters
   cbreak();                  // give me characters immediately
   refresh();                 // update the screen
+  standend();
   struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
   while (1) {
     switch (poll(pfds, 2, -1)) {
-
       case -1:
         perror("poll");
         exit(EXIT_FAILURE);
@@ -181,7 +228,8 @@ void control_test() {
           else if (iscntrl(c))
             printw("Client pressed '^%c'.\n", c + 64);
           else {
-            printw("Client pressed '%c'.\n", c);
+            //printw("Client pressed '%c'.\n", c);
+	    
             sendBuff[0] = c;
             sendBuff[1] = '\0';
             send_to_server();
@@ -191,7 +239,11 @@ void control_test() {
           // server
           ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
-            printw("Server sent '%s'.\n", recvBuff);
+            mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
+	    for(int i = 0; i < 20; i++) {
+	      mvprintw(i + 1, 0, list_row[i].content);
+	    }	   
+	     
           }
           else {
             printw("[Server closed connection.]\n");
@@ -284,39 +336,6 @@ void read_socket()
   }
 }
 
-void initBoard(){
-  init_pair(1, COLOR_BLACK, COLOR_GREEN);
-  init_pair(2, COLOR_BLACK, COLOR_RED);
-  init_pair(3, COLOR_BLACK, COLOR_BLUE);
-  init_pair(4, COLOR_BLACK, COLOR_WHITE);
-  init_pair(5, COLOR_BLACK, COLOR_CYAN);
-
-  //background team A (red)
-  for(int i = 70; i < 80; i++){
-    for(int j = 1; j <= 10; j++){
-      attron(COLOR_PAIR(2));
-      mvprintw(j, i, " ");
-    }
-  }
-
-  //background team B (blue)
-  for(int i = 70; i < 80; i++){
-    for(int j = 11; j <= 20; j++){
-      attron(COLOR_PAIR(3));
-      mvprintw(j, i, " ");
-    }
-  }
-
-  //description area (scrollable)
-  for(int i = 0; i < 80; i++){
-    for(int j = 21; j < 24; j++){
-      attron(COLOR_PAIR(4));
-      mvprintw(j, i, " ");
-    }
-  }
-
-}
-
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -360,9 +379,11 @@ int main(int argc, char *argv[])
   start_color();
   initscr();
   loadMap(mapNameFromServer);
+  teamInfoMap();
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
   load_players();
+  place_players();
   control_test();
   endwin();
 

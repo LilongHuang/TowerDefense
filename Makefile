@@ -1,4 +1,4 @@
-all: cursesColors map curses server play
+all: cursesColors map server play
 
 cursesColors:cursesColors.c
 	c99 -Wall -o cursesColors cursesColors.c -lncurses
@@ -8,10 +8,6 @@ map:map.c
 	c99 -c map.c
 	chmod 770 map.o
 	chmod 770 map.c
-
-curses:curses.c map.o
-	c99 -Wall -o curses curses.c map.o -lncurses
-	chmod 770 curses.c
 
 server:server.c map.o
 	c99 -Wall -pthread -D_GNU_SOURCE -o serve server.c map.o -lncurses

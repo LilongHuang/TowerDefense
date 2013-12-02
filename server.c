@@ -28,6 +28,7 @@
 
 
 typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
+//typedef enum {A, D, UNASSIGNED_SYMBOL} symbol_t;
 
 struct player_t
 {
@@ -35,6 +36,7 @@ struct player_t
   pthread_mutex_t player_write_mutex;
   char name[10];
   team_t team;
+  //symbol_t symbol;
   int x; // column
   int y; // row
   int score;
@@ -121,6 +123,7 @@ void init_player(struct player_t *p){
   p -> y = 3;
   p -> score = 0;
   p -> player_color = player_colors;
+  //p -> symbol = UNASSIGNED_SYMBOL;
   player_colors++;
 }
 
@@ -177,12 +180,17 @@ void create_teams(){
       sprintf(build_color_player, "%d%s", p->player_color, p->name);
       strcat(temp_a_team, build_color_player);
       strcat(temp_a_team, ",");
+      //p.symbol = A;
+      //assignRespwanPoint(p.x, p.y);
+      //printf("%d%d\n", p.x, p.y);
+      //printf("%d%d\n", p.x, p.y);
     }
     else{
       char build_color_player[15];
       sprintf(build_color_player, "%d%s", p->player_color, p->name);
       strcat(temp_b_team, build_color_player);
       strcat(temp_b_team, ",");
+      //p.symbol = D;
     }
   }
   strcpy(a_team, temp_a_team);
@@ -779,7 +787,7 @@ int main(int argc, char *argv[])
 
   bind(listenfd, (struct sockaddr*)&serv_addr, sizeof serv_addr);
   listen(listenfd, 10);
-  
+
   /*if(sec_counter == 0){
     int connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
     char *ghs = "game has already started";
@@ -795,7 +803,7 @@ int main(int argc, char *argv[])
     {
       fprintf(stderr, "Server unable to create client_thread\n");
     }
-    
+
     pthread_mutex_lock(&team_array_mutex);
     client_count += 1;
     if(client_count == 1){
