@@ -284,8 +284,8 @@ struct player_t* team_setup(int connfd){
   return player;
 }
 
-int is_attacker(const struct player_t p) {
-  return (p.team == TEAM_A && round_index == 1) || (p.team == TEAM_B && round_index == 2);
+int is_attacker(const struct player_t* p) {
+  return (p->team == TEAM_A && round_index == 1) || (p->team == TEAM_B && round_index == 2);
 }
 
 int getBackgroundColor(int x, int y) {
@@ -311,7 +311,7 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
         modified = true;
       }
       else if (t->c == PLAYER_CHAR) {
-        printf("%s", "Found overlapping players!\n");
+        printf("Found overlapping players at %i, %i!\n", x, y);
         // two players there; assign it team color
         t->bg_color = p->player_color;
         modified = true;
@@ -418,13 +418,11 @@ void update_bullets(void) {
     char target = getCharOnMap(b->x, b->y);
     
     // collide with destroyables
-    
     // cover tiles
     if (target == '0') {
       destroyed = true;
     }
-    else if (isDestroyableCoverChar(target)) {
-      // check to see if attacker bullet
+    else if (isDestroyableCoverChar(target) && !is_attacker(b->owner)) {
       target--;
       if (!isDestroyableCoverChar(target)) {
         target = ' ';
@@ -433,12 +431,23 @@ void update_bullets(void) {
       destroyed = true;
     }
     // castle tiles
-    else if (isCastleChar(target)) {
-      // check to see if defender bullet
+    else if (isCastleChar(target) && is_attacker(b->owner)) {
+      // decrement strength of castle walls
+      destroyed = true;
     }
     
     // collide with players
+    for (int player_index = 0; player_index < client_count; player_index++) {
+      struct player_t* player = &player_list[player_index];
+      if (player->x == b->x && player->y == b->y) {
+	// award owner kill points
+	// force player to respawn
+	//   maybe set x/y to -1 and then start a spawn timer
+      }
+    }
+    // collide with other bullets
     
+    // finally, if bullet needs to be destroyed, kill it 
     if (destroyed) {
       destroy_bullet(i);
       i--;
