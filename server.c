@@ -257,7 +257,7 @@ struct player_t* team_setup(int connfd){
       temp_player.team = TEAM_B;
       player = update_b_team(&temp_player, tempName);
     }
-    snprintf(temp_player.sendBuff, sizeof temp_player.sendBuff, "%s", temp_player.name);
+    snprintf(player->sendBuff, sizeof player->sendBuff, "%s", player->name);
   }
   else { // if(strcmp(tempTeam, "2") == 0){
     //update player list
@@ -269,7 +269,7 @@ struct player_t* team_setup(int connfd){
       temp_player.team = TEAM_A;
       player = update_a_team(&temp_player, tempName);
     }
-    snprintf(temp_player.sendBuff, sizeof temp_player.sendBuff, "%s", temp_player.name);
+    snprintf(player->sendBuff, sizeof player->sendBuff, "%s", player->name);
   }
   //player = &(player_list[client_count-1]);
   printf("%s has joined\n", player->name);  
