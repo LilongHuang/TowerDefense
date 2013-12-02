@@ -20,7 +20,9 @@
 #define TIMER_START 5
 #define EVENT_QUEUE_SIZE 20
 #define MILLIS_BETWEEN_UPDATES 500
-#define MAX_MESSAGE_LINES 5
+#define MAX_MESSAGE_LINES 100
+
+#define RENDER_FORMAT_STRING "render char%c x%i y%i colora%i colorb%i"
 
 #define PLAYER_CHAR 'O'
 
@@ -78,7 +80,7 @@ char a_team[512];
 char b_team[512];
 
 // don't remove these, we need at least sendBuff now
-char sendBuff[1024];
+char sendBuff[4096];
 char recvBuff[1024];
 
 int client_count = 0;
@@ -376,7 +378,7 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
     //sprintf(sendBuff,
     //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
     // update new location
-    sprintf(sendBuff, "Render char%c at x%i y%i colora%i colorb%i\nRender char%c at x%i y%i colora%i colorb%i",
+    sprintf(sendBuff, RENDER_FORMAT_STRING "\n" RENDER_FORMAT_STRING,
             oldt.c, oldx, oldy, oldt.fg_color, oldt.bg_color,
             newt.c, player_list[0].x, player_list[0].y, newt.fg_color, newt.bg_color);
 
@@ -398,12 +400,15 @@ void destroy_bullet(int start) {
   bullet_count--;
 }
 
-void update_bullets(void) {
+char* update_bullets(void) {
   // advance all bullets forward
   pthread_mutex_lock(&map_mutex);
   pthread_mutex_lock(&bullet_array_mutex);
+  sendBuff[0] = '\0';
   for (int i = 0; i < bullet_count; i++) {
     struct bullet_t* b = &(bullet_list[i]);
+    int oldx = b->x;
+    int oldy = b->y;
     switch (b->direction) {
       case 0: b->y--; break;
       case 1: b->x++; break;
@@ -470,9 +475,21 @@ void update_bullets(void) {
       destroy_bullet(i);
       i--;
     }
+    
+    // append update data to message
+    char line[1024];
+    struct tile_t oldt;
+    struct tile_t newt;
+    getTileAt(&oldt, oldx, oldy);
+    getTileAt(&newt, b->x, b->y);
+    snprintf(line, sizeof line, RENDER_FORMAT_STRING "\n" RENDER_FORMAT_STRING "\n",
+             oldt.c, oldx, oldy, oldt.fg_color, oldt.bg_color,
+             newt.c, b->x, b->y, newt.fg_color, newt.bg_color);
+    strcat(sendBuff, line);
   }
   pthread_mutex_unlock(&bullet_array_mutex);
   pthread_mutex_unlock(&map_mutex);
+  return sendBuff;
 }
 
 // returns a char pointer to the first char of a message
@@ -485,7 +502,7 @@ char* process_message(struct event_t* event) {
   struct player_t *p = event->player;
   char c = event->c;
   if (c == 'U') {
-    update_bullets();
+    return update_bullets();
   }
   else if (c == 'G') {
   // Game Start
@@ -523,7 +540,7 @@ char* process_message(struct event_t* event) {
     return NULL;
   }
   else if (c == 'O' || c == 'o') {
-    sprintf(sendBuff, "Render x%i y%i c%c colorA%i colorB%i", p->x, p->y, PLAYER_CHAR, 0, 1);
+    sprintf(sendBuff, RENDER_FORMAT_STRING "\n", PLAYER_CHAR, p->x, p->y, 0, 1);
     return sendBuff;
   }
   else {
@@ -546,11 +563,6 @@ void pop_message(void) {
   struct event_t* event = next_event;
   char* output = process_message(event);
 
-  // FIXME there's something wrong here
-  // like this whole city wants to scream, and no one makes a sound
-  // (or that it's only sending the second line to players who aren't
-  //   the first player)
-
   // if that message has any output, send it to all players
   if (output != NULL) {
     // parse lines
@@ -565,13 +577,15 @@ void pop_message(void) {
     }
     
     // send message
-    printf("  Sending message to %i player(s):\n", client_count);
+    if (event->c != 'U')
+      printf("  Sending message to %i player(s):\n", client_count);
     for (int i = 0; i < client_count; i++) {
       struct player_t *p = &player_list[i];
       //printf("Acquiring lock on %s\n", p->name);
       pthread_mutex_lock(&(p->player_write_mutex));
       //printf("%s", "Lock acquired.\n");
-      //printf("    %c to %s\n", event->c, p->name);
+      if (event->c != 'U')
+        printf("    %c to %s\n", event->c, p->name);
       // print out newline-delimited instructions
       for (int line = 0; line < MAX_MESSAGE_LINES; line++) {
         char* nextLine = messageLines[line];
