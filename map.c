@@ -242,7 +242,6 @@ void initBoard(){
 
 void teamInfoMap() {
         attron(COLOR_PAIR(5));
-
         int i = 0;
         for (i = 0; i < 80; i++) {
                 mvprintw(0, i, " ");
@@ -317,12 +316,12 @@ void loadMap(char mapFile[1024]) {
 					}
 				}
 				mvprintw(i - 6, 0, list_row[mapRow].content);
-
 			}
 			i++;
 			if (i > 27) break;
 		}
 		fclose(file);
+		//fprintf(stdout, "%s", getMap());
 	};
 
 	/*	

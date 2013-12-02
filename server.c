@@ -13,11 +13,14 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #define max_players 10
 #define players_per_team 5
 #define TIMER_START 5
 #define EVENT_QUEUE_SIZE 20
+#define MILLIS_BETWEEN_UPDATES 500
+#define MAX_MESSAGE_LINES 5
 
 #define PLAYER_CHAR 'O'
 
@@ -27,7 +30,8 @@ typedef enum {TEAM_A, TEAM_B, UNASSIGNED} team_t;
 
 struct player_t
 {
-  pthread_mutex_t player_mutex;
+  pthread_mutex_t player_read_mutex;
+  pthread_mutex_t player_write_mutex;
   char name[10];
   team_t team;
   //symbol_t symbol;
@@ -43,6 +47,7 @@ struct player_t
 
 struct player_t SYSTEM_PLAYER;
 
+const char BULLET_CHARS[4] = {'^', '>', 'v', '<'};
 struct bullet_t
 {
   struct player_t* owner;
@@ -53,13 +58,14 @@ struct bullet_t
 
 struct bullet_t bullet_list[1024];
 pthread_mutex_t bullet_array_mutex = PTHREAD_MUTEX_INITIALIZER;
+int bullet_count;
 
 typedef enum {MOVE_REL, MOVE_ABS, SHOOT} event_type_t;
 
 struct event_t
 {
   event_type_t type;
-  int c;
+  char c;
   struct player_t* player;
   //int rows;
   //int cols;
@@ -77,7 +83,7 @@ char b_team[512];
 char sendBuff[1024];
 char recvBuff[1024];
 
-int clientCount = 0;
+int client_count = 0;
 
 int sec_counter = TIMER_START;
 int round_index = 0;
@@ -85,18 +91,30 @@ int round_index = 0;
 struct player_t player_list[10];
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// map filename, as string
 char mapPath[1024];
 
-// do not use directly unless you know what you're doing!
-// use push_message; it'll make your life much easier
+struct tile_t {
+  char c;
+  int fg_color;
+  int bg_color;
+};
+
+pthread_mutex_t map_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// do not use ANY of these directly unless you know what you're doing!
+// all input should be handled via cases in process_message().
 struct event_t next_event[EVENT_QUEUE_SIZE];
 int event_count = 0;
 pthread_mutex_t next_event_mutex = PTHREAD_MUTEX_INITIALIZER;
 sem_t next_event_space_remaining;
 sem_t next_event_messages_waiting;
 
+// ===========================================================
+
 void init_player(struct player_t *p){
-  pthread_mutex_init(&(p->player_mutex), NULL);
+  pthread_mutex_init(&(p->player_read_mutex), NULL);
+  pthread_mutex_init(&(p->player_write_mutex), NULL);
   p -> team = UNASSIGNED;
   p -> fd = -1;
   p -> x = 3;
@@ -154,10 +172,10 @@ void create_teams(){
   char temp_a_team[512];
   char temp_b_team[512];
   for(int i = 0; i < (team_A_counter + team_B_counter); i++){
-    struct player_t p = player_list[i];
-    if(p.team == TEAM_A){
+    struct player_t* p = &player_list[i];
+    if(p->team == TEAM_A){
       char build_color_player[15];
-      sprintf(build_color_player, "%d%s", p.player_color, p.name);
+      sprintf(build_color_player, "%d%s", p->player_color, p->name);
       strcat(temp_a_team, build_color_player);
       strcat(temp_a_team, ",");
       //p.symbol = A;
@@ -167,7 +185,7 @@ void create_teams(){
     }
     else{
       char build_color_player[15];
-      sprintf(build_color_player, "%d%s", p.player_color, p.name);
+      sprintf(build_color_player, "%d%s", p->player_color, p->name);
       strcat(temp_b_team, build_color_player);
       strcat(temp_b_team, ",");
       //p.symbol = D;
@@ -180,9 +198,9 @@ void create_teams(){
 
 int balance_names(char *name){
   for(int i = 0; i < team_A_counter + team_B_counter; i++){
-    struct player_t temp_player = player_list[i];
+    struct player_t* temp_player = &player_list[i];
 
-    if(strcmp(name, temp_player.name) == 0){
+    if(strcmp(name, temp_player->name) == 0){
       int rn = rand()%9000%1000;
       char rn_string[128];
       sprintf(rn_string, "%d", rn);
@@ -194,34 +212,20 @@ int balance_names(char *name){
   return 1;
 }
 
-void update_a_team(struct player_t *p, char *name){
+struct player_t* update_a_team(struct player_t *p, char *name){
   while(balance_names(name) == 0){}
   strcpy(p -> name, name);
   player_list[team_A_counter + team_B_counter] = *p;
   team_A_counter += 1;
-  //char temp[512];
-  /*if(strlen(a_team) > 0){
-    snprintf(temp, sizeof temp, "%s, %s", a_team, name);
-  }
-  else{
-    snprintf(temp, sizeof temp, "%s", name);
-  }
-  strcpy(a_team, temp);*/
+  return &player_list[team_A_counter + team_B_counter - 1];
 }
 
-void update_b_team(struct player_t *p, char *name){
+struct player_t* update_b_team(struct player_t *p, char *name){
   while(balance_names(name) == 0){}
   strcpy(p -> name, name);
   player_list[team_A_counter + team_B_counter] = *p;
   team_B_counter += 1;
-  //char temp[512];
-  /*if(strlen(b_team) > 0){
-    snprintf(temp, sizeof temp, "%s, %s", b_team, name);
-  }
-  else{
-    snprintf(temp, sizeof temp, "%s", name);
-  }
-  strcpy(b_team, temp);*/
+  return &player_list[team_A_counter + team_B_counter - 1];
 }
 
 void init_signals(void) {
@@ -233,11 +237,11 @@ void init_signals(void) {
   return;
 }
 
-struct player_t team_setup(int connfd){
+struct player_t* team_setup(int connfd){
   pthread_mutex_lock(&team_array_mutex);
 
-  struct player_t player;
-  init_player(&player);
+  struct player_t temp_player;
+  init_player(&temp_player);
 
     /*printf("TS: Locking player %s\n", player.name);
   pthread_mutex_lock(&(player.player_mutex));
@@ -245,98 +249,238 @@ struct player_t team_setup(int connfd){
   pthread_mutex_unlock(&(player.player_mutex));
   printf("%s", "TS: Released.\n");*/
 
-  read(connfd, player.recvBuff, sizeof player.recvBuff);
+  read(connfd, temp_player.recvBuff, sizeof temp_player.recvBuff);
 
   char tempName[10];
   char tempTeam[10];
-  sscanf(player.recvBuff, "%s %s", tempName, tempTeam);
+  sscanf(temp_player.recvBuff, "%s %s", tempName, tempTeam);
 
-  player.fd = connfd;
+  temp_player.fd = connfd;
+  struct player_t* player;
 
   if(strcmp(tempTeam, "1") == 0){
     //update player list
     if(team_A_counter < players_per_team){
-      player.team = TEAM_A;
-      update_a_team(&player, tempName);
+      temp_player.team = TEAM_A;
+      player = update_a_team(&temp_player, tempName);
     }
     else{
-      player.team = TEAM_B;
-      update_b_team(&player, tempName);
+      temp_player.team = TEAM_B;
+      player = update_b_team(&temp_player, tempName);
     }
-
-    //update_a_team(&player, tempName);
-
-    snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
+    snprintf(player->sendBuff, sizeof player->sendBuff, "%s", player->name);
   }
   else { // if(strcmp(tempTeam, "2") == 0){
     //update player list
     if(team_B_counter < players_per_team){
-      player.team = TEAM_B;
-      update_b_team(&player, tempName);
+      temp_player.team = TEAM_B;
+      player = update_b_team(&temp_player, tempName);
     }
     else{
-      player.team = TEAM_A;
-      update_a_team(&player, tempName);
+      temp_player.team = TEAM_A;
+      player = update_a_team(&temp_player, tempName);
     }
-
-    //update_b_team(&player, tempName);
-
-    snprintf(player.sendBuff, sizeof player.sendBuff, "%s", player.name);
+    snprintf(player->sendBuff, sizeof player->sendBuff, "%s", player->name);
   }
-  
-  printf("%s has joined\n", player.name);  
+  //player = &(player_list[client_count-1]);
+  printf("%s has joined\n", player->name);  
 
   // echo all input back to client
-  write(connfd, player.sendBuff, strlen(player.sendBuff) + 1);
+  write(connfd, player->sendBuff, strlen(player->sendBuff) + 1);
 
-  pthread_mutex_unlock(&(player.player_mutex));
   pthread_mutex_unlock(&team_array_mutex);
 
   return player;
 }
 
-int is_attacker(const struct player_t p) {
-  return (p.team == TEAM_A && round_index == 1) || (p.team == TEAM_B && round_index == 2);
+int is_attacker(const struct player_t* p) {
+  return (p->team == TEAM_A && round_index == 1) || (p->team == TEAM_B && round_index == 2);
 }
 
-char* getCharAt(int x, int y) {
+int getBackgroundColor(int x, int y) {
+  return 0;
+}
+
+struct tile_t getTileAt(struct tile_t* t, int x, int y) {
+  t->c = ' ';
+  t->fg_color = 1;
+  t->bg_color = getBackgroundColor(x, y);
+  
+  bool modified = false;
+  
   // check if there's a player there
-  for (int i = 0; i < clientCount; i++) {
-    
+  for (int i = 0; i < client_count; i++) {
+    struct player_t* p = &player_list[i];
+    printf("Checking player %s (%d, %d) against %d, %d\n", p->name, p->x, p->y, x, y);
+    if (p->x == x && p->y == y) {
+      if (t->c == ' ') {
+        printf("Found a match! '%c' -> '%c'\n", t->c, PLAYER_CHAR);
+        t->c = PLAYER_CHAR;
+        t->fg_color = p->player_color;
+        modified = true;
+      }
+      else if (t->c == PLAYER_CHAR) {
+        printf("Found overlapping players at %i, %i!\n", x, y);
+        // two players there; assign it team color
+        t->bg_color = p->player_color;
+        modified = true;
+      }
+    }
   }
+  
   // check if there's a bullet there
+  pthread_mutex_lock(&bullet_array_mutex);
+  for (int i = 0; i < bullet_count; i++) {
+    struct bullet_t* b = &(bullet_list[i]);
+    if (b->x == x && b->y == y) {
+      t->c = BULLET_CHARS[b->direction];
+      t->fg_color = b->owner->player_color;
+      modified = true;
+    }
+  }
+  pthread_mutex_unlock(&bullet_array_mutex);
+  
   // else, get whatever's on the map
-  return "cA colorA1 colorB2"; // FIXME
+  if (!modified) {
+    t->c = getCharOnMap(x, y);
+  }
+  return *t;
+}
+
+bool isCastleChar(char c) {
+  return c == '-' || c == '|' || c == '+' || c == '*' || c == '/' || c == '\\';
+}
+bool isDestroyableCoverChar(char c) {
+  return c >= '1' && c <='9';
+}
+bool isCoverChar(char c) {
+  return c == '0' || isDestroyableCoverChar(c);
 }
 
 // X and Y coordinates for this function are absolute
 // (because defenders can warp to absolute locations)
 char* try_attacker_move(struct player_t *p, int x, int y) {
+  pthread_mutex_lock(&map_mutex);
   char c = getCharOnMap(x, y);
+  char* retval;
   if (x < 0 || x > 70 || y < 0 || y > 20) {
     // nope, you're trying to move off the edge of the map
-    return NULL;
+    retval = NULL;
   }
-  else if (c == '-' || c == '|' || c == '*' || c == '+' || (c >= '1' && c <='9') ) {
+  else if (isCastleChar(c) || isCoverChar(c) ) {
     // nope, you're trying to move into a wall
-    return NULL;
+    retval = NULL;
   }
   else {
     // update former location
-    char* out = getCharAt(p->x, p->y);
+    struct tile_t oldt;
+    struct tile_t newt;
+    int oldx = p->x;
+    int oldy = p->y;
+    p->x = x;
+    p->y = y;
+    getTileAt(&oldt, oldx, oldy);
+    getTileAt(&newt, x, y);
     //sprintf(sendBuff,
     //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
     // update new location
-    sprintf(sendBuff, "Move %s from x%i y%i\nto x%i y%i", p->name, p->x, p->y, x, y);
-    p->x = x;
-    p->y = y;
-    return sendBuff;
+    sprintf(sendBuff, "Render char%c at x%i y%i colora%i colorb%i\nRender char%c at x%i y%i colora%i colorb%i",
+            oldt.c, oldx, oldy, oldt.fg_color, oldt.bg_color,
+            newt.c, player_list[0].x, player_list[0].y, newt.fg_color, newt.bg_color);
+
+    retval = sendBuff;
   }
+  pthread_mutex_unlock(&map_mutex);
+  return retval;
 }
 
 char* shoot(struct player_t* p, int direction) {
   // shoot!
   return NULL;
+}
+
+void destroy_bullet(int start) {
+  for (int i = start + 1; i < bullet_count; i++) {
+    bullet_list[i-1] = bullet_list[i];
+  }
+  bullet_count--;
+}
+
+void update_bullets(void) {
+  // advance all bullets forward
+  pthread_mutex_lock(&map_mutex);
+  pthread_mutex_lock(&bullet_array_mutex);
+  for (int i = 0; i < bullet_count; i++) {
+    struct bullet_t* b = &(bullet_list[i]);
+    switch (b->direction) {
+      case 0: b->y--; break;
+      case 1: b->x++; break;
+      case 2: b->y++; break;
+      case 3: b->x--; break;
+    }
+    bool destroyed = false;
+    // destroy bullets beyond the boundaries of the map
+    if (b->x < 0 || b->x > 70 || b->y < 0 || b->y > 20) {
+      destroyed = true;
+    }
+    
+    char target = getCharOnMap(b->x, b->y);
+    
+    // collide with destroyables
+    // cover tiles
+    if (target == '0') {
+      destroyed = true;
+    }
+    else if (isDestroyableCoverChar(target)) {
+      target--;
+      if (!isDestroyableCoverChar(target)) {
+        target = ' ';
+      }
+      setCharOnMap(target, b->x, b->y);
+      // award points to defenders for destroying cover
+      if (!is_attacker(b->owner)) {
+        b->owner->score += 1;
+      }
+      destroyed = true;
+    }
+    // castle tiles
+    else if (isCastleChar(target) && is_attacker(b->owner)) {
+      // TODO decrement strength of castle walls
+      target = '&';
+      setCharOnMap(target, b->x, b->y);
+      destroyed = true;
+    }
+    
+    // collide with players
+    for (int player_index = 0; player_index < client_count; player_index++) {
+      struct player_t* player = &player_list[player_index];
+      if (player->x == b->x && player->y == b->y) {
+	// award owner kill points
+        b->owner->score += 20;
+	// TODO force player to respawn
+	//   maybe set x/y to -1 and then start a spawn timer
+        destroyed = true;
+      }
+    }
+    
+    // collide with other bullets
+    for (int bullet_index = i+1; bullet_index < bullet_count; bullet_index++) {
+      struct bullet_t* other = &bullet_list[bullet_index];
+      if (other->x == b->x && other->y == b->y) {
+        // mutual destruction
+        destroyed = true;
+        destroy_bullet(bullet_index);
+      }
+    }
+    
+    // finally, if bullet needs to be destroyed, kill it 
+    if (destroyed) {
+      destroy_bullet(i);
+      i--;
+    }
+  }
+  pthread_mutex_unlock(&bullet_array_mutex);
+  pthread_mutex_unlock(&map_mutex);
 }
 
 // returns a char pointer to the first char of a message
@@ -348,8 +492,11 @@ char* shoot(struct player_t* p, int direction) {
 char* process_message(struct event_t* event) {
   struct player_t *p = event->player;
   char c = event->c;
+  if (c == 'U') {
+    update_bullets();
+  }
+  else if (c == 'G') {
   // Game Start
-  if (c == 'G') {
     char *game_started = "GameIsStarting!";
     sprintf(sendBuff, "%s %s %s %s", game_started, mapPath, a_team, b_team);
     return sendBuff;
@@ -395,7 +542,7 @@ char* process_message(struct event_t* event) {
 }
 
 void pop_message(void) {
-  printf("%s\n", "Popping message");
+  //printf("%s\n", "Popping message");
   sem_wait(&next_event_messages_waiting);
   pthread_mutex_lock(&next_event_mutex);
   pthread_mutex_lock(&team_array_mutex);
@@ -406,36 +553,52 @@ void pop_message(void) {
   // this function
   struct event_t* event = next_event;
   char* output = process_message(event);
-  
+
+  // FIXME there's something wrong here
+  // like this whole city wants to scream, and no one makes a sound
+  // (or that it's only sending the second line to players who aren't
+  //   the first player)
+
   // if that message has any output, send it to all players
   if (output != NULL) {
-    printf("  Sending message to %i player(s):\n", clientCount);
-    for (int i = 0; i < clientCount; i++) {
-      struct player_t *p = &(player_list[i]);
+    // parse lines
+    char* messageLines[MAX_MESSAGE_LINES] = {NULL};
+    char* saveptr;
+    messageLines[0] = strtok_r(output, "\n", &saveptr);
+    int i = 1;
+    //printf("%s\n", messageLines[0]);
+    while((messageLines[i] = strtok_r(NULL, "\n", &saveptr)) != NULL) {
+      //printf("%s\n", messageLines[i]);
+      i++;
+    }
+    
+    // send message
+    printf("  Sending message to %i player(s):\n", client_count);
+    for (int i = 0; i < client_count; i++) {
+      struct player_t *p = &player_list[i];
       //printf("Acquiring lock on %s\n", p->name);
-      pthread_mutex_lock(&(p->player_mutex));
+      pthread_mutex_lock(&(p->player_write_mutex));
       //printf("%s", "Lock acquired.\n");
-      printf("    %c to %s\n", event->c, p->name);
+      //printf("    %c to %s\n", event->c, p->name);
       // print out newline-delimited instructions
-      char* saveptr;
-      char* nextLine = strtok_r(output, "\n", &saveptr);
-      do {
-        printf("%s\n", nextLine);
+      for (int line = 0; line < MAX_MESSAGE_LINES; line++) {
+        char* nextLine = messageLines[line];
+        if (nextLine == NULL) {
+          break;
+        }
         write(p->fd, nextLine, strlen(nextLine)+1);
-	usleep(1); // FIXME there's gotta be a better way to keep it
-	// from not seeing the second line of multiline messages...
-      } while((nextLine = strtok_r(NULL, "\n", &saveptr)) != NULL);
-      pthread_mutex_unlock(&(p->player_mutex));
+        usleep(1);
+      }
+      pthread_mutex_unlock(&(p->player_write_mutex));
     }
   }
   
   // slide all events over to fill empty spot
-  int last_event_index = 0;
-  sem_getvalue(&next_event_messages_waiting, &last_event_index);
-  printf("Last event is #%i\n", last_event_index);
-  for (int i = 0; i < last_event_index + 1; i++) {
+  //printf("Last event is #%i\n", event_count);
+  for (int i = 0; i < event_count + 1; i++) {
     next_event[i] = next_event[i+1];
   }
+  event_count--;
 
   // release resources
   pthread_mutex_unlock(&team_array_mutex);
@@ -450,22 +613,21 @@ void push_message(const char m, struct player_t* player) {
   // capture event queue, and prepare to add a new event
   sem_wait(&next_event_space_remaining);
   pthread_mutex_lock(&next_event_mutex);
+  //printf(" - %s locking\n", player->name);
   // initialize event to put on queue
   struct event_t event;
   event.type = SHOOT;
   event.c = m;
   event.player = player;
-  printf(">> Adding %c by %s\n", event.c, player->name);
+  if (event.c != 'U')
+    printf(">> Adding %c by %s\n", event.c, player->name);
   // put event on queue
-  int event_count = 0;
-  sem_getvalue(&next_event_messages_waiting, &event_count);
   next_event[event_count] = event;
+  event_count++;
   // release resources
-  pthread_mutex_unlock(&next_event_mutex);
   sem_post(&next_event_messages_waiting);
-  event_count = 0;
-  sem_getvalue(&next_event_messages_waiting, &event_count);
-  printf("Completed push. Next event is #%i\n", event_count);
+  //printf("Completed push. Next event is #%i\n", event_count);
+  pthread_mutex_unlock(&next_event_mutex);
 }
 
 void *client_thread(void *arg)
@@ -480,13 +642,15 @@ void *client_thread(void *arg)
     char *ghs = "Game has already started";
     write(connfd, ghs, strlen(ghs)+1);
     pthread_mutex_lock(&team_array_mutex);
-    clientCount--;
+    client_count--;
     pthread_mutex_unlock(&team_array_mutex);
     close(connfd);
     pthread_exit(0);
   }
 
   if((team_A_counter + team_B_counter) > 9){
+    // what if the max isn't ten players any more?
+    // hard-coding things like this is bad practice.
     char *full_game = "Already 10 players joined";
     write(connfd, full_game, strlen(full_game)+1);
     close(connfd);
@@ -495,7 +659,7 @@ void *client_thread(void *arg)
 
   int n;
   
-  struct player_t player = team_setup(connfd);
+  struct player_t* player = team_setup(connfd);
   //printf("Player %s has FD %i\n", player_list[0].name, player_list[0].fd);
   //printf("Player %s has FD %i\n", player.name, player.fd);
   /*printf("%s", "Attempting lock\n");
@@ -514,13 +678,15 @@ void *client_thread(void *arg)
       sleep(1);
     }
     else {
-      pthread_mutex_lock(&(player.player_mutex));
-      if ((n = read(connfd, player.recvBuff, sizeof player.recvBuff)) != 0) {
+      //printf("Locking %s for read\n", player->name);
+      pthread_mutex_lock(&(player->player_read_mutex));
+      //printf("Locked %s for read\n", player->name);
+      if ((n = read(connfd, player->recvBuff, sizeof player->recvBuff)) != 0) {
 	  // echo all input back to client
 	  //printf("Writing %d bytes to buffer\n", n);
           //write(connfd, player.recvBuff, n);
-	  printf("Pushing %c onto event queue from %s\n", player.recvBuff[0], player.name);
-	  push_message(player.recvBuff[0], &player);
+	  printf("Pushing %c onto event queue from %s\n", player->recvBuff[0], player->name);
+	  push_message(player->recvBuff[0], player);
       }
       else {
 	// They disconnected-- release the client
@@ -529,10 +695,19 @@ void *client_thread(void *arg)
 	//player_count--;
 	pthread_exit(0);
       }
-      pthread_mutex_unlock(&(player.player_mutex));
+      //printf("Unlocking %s from read\n", player->name);
+      pthread_mutex_unlock(&(player->player_read_mutex));
+      //printf("Unlocked %s from read\n", player->name);
     }
   }
   return NULL;
+}
+
+void* update_thread(void *arg) {
+  while (1) {
+    push_message('U', &SYSTEM_PLAYER);
+    usleep(MILLIS_BETWEEN_UPDATES);
+  }
 }
 
 void *loading_thread(void *arg){
@@ -548,6 +723,12 @@ void *loading_thread(void *arg){
   push_message('G', &SYSTEM_PLAYER);
   round_index++;
   loadMap(mapPath);
+  
+  pthread_t upd_thread;
+    if (pthread_create(&upd_thread, NULL, update_thread, NULL) != 0)
+    {
+      fprintf(stderr, "Server unable to create update_thread\n");
+    }
 
   while (1) {
     pop_message();
@@ -598,7 +779,7 @@ int main(int argc, char *argv[])
   while(1)
   {
     int connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
-    printf("Accepted a connection on FD %i\n", connfd);
+    //printf("Accepted a connection on FD %i\n", connfd);
     pthread_t conn_thread;
     if (pthread_create(&conn_thread, NULL, client_thread, &connfd) != 0)
     {
@@ -606,8 +787,8 @@ int main(int argc, char *argv[])
     }
 
     pthread_mutex_lock(&team_array_mutex);
-    clientCount += 1;
-    if(clientCount == 1){
+    client_count += 1;
+    if(client_count == 1){
       pthread_t timer_thread;
       if (pthread_create(&timer_thread, NULL, loading_thread, &connfd) != 0)
 	{

@@ -52,23 +52,17 @@ struct row_t list_row[20];
 char* getMap();
 
 char* getMapName();
-
 char* getAuthor();
 
 int getCastleStrength();
-
 int getCastleTouch();
 
 int getAttackerWin();
-
 int getAttackerShots();
-
 int getAttackerRespawn();
 
 int getDefenderWin();
-
 int getDefenderShots(); 
-
 int getDefenderRespawn();
 
 char getCharOnMap(int, int);
