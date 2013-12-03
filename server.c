@@ -549,7 +549,7 @@ char* shoot(struct player_t* p, int direction) {
 }
 
 bool isSystemMessage(struct event_t* event) {
-  return event->c == 'U' || event->c == 'T';
+  return event->c == 'U';// || event->c == 'T';
 }
 
 void push_message(const char m, struct player_t* player) {
@@ -637,6 +637,7 @@ char* update_bullets(void) {
     
     char target = getCharOnMap(b->x, b->y);
     
+
     // collide with destroyables
     // cover tiles
     if (target == '0') {
@@ -667,6 +668,7 @@ char* update_bullets(void) {
           // TODO write a "castle wall percentage" calculator in map.c
           // then call it here and add its output to the output of the function
           // award points to the attacker
+          
         }
       }
       // regardless of team, you can't shoot through the castle
@@ -679,12 +681,9 @@ char* update_bullets(void) {
       if (player->x == b->x && player->y == b->y && player->team != b->owner->team) {
 	// award owner kill points
         b->owner->score += 20;
-	// TODO force player to respawn
-        player->x = 0;
-        player->y = 0;
-        // FIXME
+        player->x = -1;
+        player->y = -1;
         player->respawn_timer = getRespawnTime(player);
-	//   maybe set x/y to -1 and then start a spawn timer
         destroyed = true;
       }
     }
@@ -793,6 +792,7 @@ char* process_message(struct event_t* event) {
   else if (c == 'T') {
     // concurrency-- FIXME
     sprintf(sendBuff, "timer %i", match_timer);
+    return sendBuff;
   }
   else if (c == 'F') {
     // Force Rerender
@@ -988,7 +988,7 @@ void* update_thread(void *arg) {
       match_timer--;
       push_message('T', &SYSTEM_PLAYER);
       update_respawns();
-      printf("%s", "Tick\n");
+      printf("Tick: %i\n", match_timer);
       updates_since_last_clock_tick = 0;
     }
     usleep(MICROSECONDS_BETWEEN_UPDATES);
@@ -1008,7 +1008,7 @@ void *loading_thread(void *arg){
   push_message('G', &SYSTEM_PLAYER);
   round_index++;
   loadMap(mapPath);
-  match_timer = getDefenderWin();
+  match_timer = getDefenderWin() + 5;
   
   pthread_t upd_thread;
     if (pthread_create(&upd_thread, NULL, update_thread, NULL) != 0)
