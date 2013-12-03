@@ -22,7 +22,6 @@ char recvBuff[1024];
 char sendBuff[1024];
 int player_color = 0;
 int sockfd; // file descriptor for socket to server
-
 char mapNameFromServer[1024];
 char a_team[512];
 char b_team[512];
@@ -34,6 +33,8 @@ struct player_t {
   int player_color;
   int symbol;
   int score;
+  int score_x;
+  int score_y;
 };
 
 struct player_t Aplayer_list[5];
@@ -114,7 +115,7 @@ void display_teams(){
   int b_pos = 1;
   while (b_token) {
     b_token += 2;
-    mvprintw(b_pos, 15, b_token);
+    mvprintw(b_pos, 20, b_token);
     b_pos += 1;
     b_token = strtok(NULL, ",");
   }
@@ -145,12 +146,20 @@ void load_players(){
       player_color = cp;
 
     mvprintw(a_pos, 71, a_token);
-    a_pos += 1;
+    mvprintw(a_pos+1, 71, "0");
+    //a_pos += 2;
+
     struct player_t p;
     strcpy(p.name, a_token);
+    p.score = 0;
+    p.score_x = 71;
+    p.score_y = a_pos+1;
     p.player_color = cp;
     p.symbol = 0;
     Aplayer_list[A_Player_Count] = p;
+
+    a_pos += 2;
+
     A_Player_Count++;
     a_token = strtok(NULL, ",");
   }
@@ -171,12 +180,20 @@ void load_players(){
       player_color = cp;
 
     mvprintw(b_pos, 71, b_token);
-    b_pos += 1;
+    mvprintw(b_pos+1, 71, "0");
+    //b_pos += 2;
+
     struct player_t p;
     strcpy(p.name, b_token);
+    p.score = 0;
+    p.score_x = 71;
+    p.score_y = b_pos+1;
     p.player_color = cp;
     p.symbol = 1;
     Bplayer_list[B_Player_Count] = p;
+
+    b_pos += 2;
+
     B_Player_Count++;
 
     b_token = strtok(NULL, ",");
@@ -186,16 +203,28 @@ void load_players(){
 }
 
 void place_players() {
+  int att_respawn_points = attackerRespawnPointCount - 1;
+  int def_respawn_points = defenderRespawnPointCount - 1;
+  char a[10];
+  char b[10];
+  sprintf(a, "A");
+  sprintf(b, "B");
   for (int i = 0; i < A_Player_Count; i++) {
     struct player_t p = Aplayer_list[i];
     attron(COLOR_PAIR(p.player_color));
-    mvprintw(i + 1, 0, "A");
+    int x = attacker_respawn_location_list[att_respawn_points].x;
+    int y = attacker_respawn_location_list[att_respawn_points].y;
+    setCharOnMap(*a, x, y);
+    def_respawn_points--;
   }
 
   for (int i = 0; i < B_Player_Count; i++) {
     struct player_t p = Bplayer_list[i];
     attron(COLOR_PAIR(p.player_color));
-    mvprintw(i + 1, 2, "B");
+    int x = defender_respawn_location_list[def_respawn_points].x;
+    int y = defender_respawn_location_list[def_respawn_points].y;
+    setCharOnMap(*b, x, y);
+    def_respawn_points--;
   }
 
   refresh();
@@ -283,7 +312,8 @@ void control_test() {
                 struct player_t temp_player = Aplayer_list[i];
                 if(temp_player.player_color == atoi(color)){
                   temp_player.score = atoi(new_score);
-                  update_a_team();
+                  //update_a_team();
+		  mvprintw(temp_player.score_y, temp_player.score_x, new_score);
                   break;
                 }
               }
@@ -292,7 +322,8 @@ void control_test() {
                 struct player_t temp_player = Aplayer_list[i];
                 if(temp_player.player_color == atoi(color)){
                   temp_player.score = atoi(new_score);
-                  update_b_team();
+                  //update_b_team();
+		  mvprintw(temp_player.score_y, temp_player.score_x, new_score);
                   break;
                 }
               }
@@ -435,6 +466,37 @@ void read_socket()
   }
 }
 
+void final_standings(){
+  clear();
+
+  mvprintw(0, 0, "Team A (red)");
+  mvprintw(0, 20, "Team B (blue)");
+
+  int a_pos = 1;
+  //team a
+  for(int i = 0; i < A_Player_Count; i++){
+    struct player_t p = Aplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(a_pos, 0, p.name);
+    char p_score[512];
+    sprintf(p_score, "%d", p.score);
+    mvprintw(a_pos+1, 0, p_score);
+    attroff(COLOR_PAIR(p.player_color));
+  }
+
+  int b_pos = 1;
+  //team b
+  for(int i = 0; i < B_Player_Count; i++){
+    struct player_t p = Aplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(b_pos, 20, p.name);
+    char p_score[512];
+    sprintf(p_score, "%d", p.score);
+    mvprintw(b_pos+1, 20, p_score);
+    attroff(COLOR_PAIR(p.player_color));
+  }
+}
+
 int main(int argc, char *argv[])
 {
   if(argc < 2 || argc > 4)
@@ -474,7 +536,6 @@ int main(int argc, char *argv[])
   initscr();
   loading_screen();
   display_teams();
-
   start_color();
   initscr();
   loadMap(mapNameFromServer);
@@ -482,8 +543,9 @@ int main(int argc, char *argv[])
   initBoard();/* creates play board */
   refresh();/* Print it on to the real screen */
   load_players();
-  place_players();
+  //place_players();
   control_test();
+  final_standings();
   endwin();
 
   close(sockfd);
