@@ -1,3 +1,4 @@
+#include <stdbool.h>
 // Signals
 #define RENDER_FORMAT_STRING "render %i %i %i %i %i"
 #define BACKGROUND_COLOR 0
@@ -58,6 +59,11 @@ int getCastleTouch();
 void set_castle_strength(int, int, int);
 int get_castle_strength(int, int);
 
+bool isCastleChar(char);
+
+int get_current_wall_count();
+int get_initial_wall_count();
+
 int getAttackerWin();
 int getAttackerShots();
 int getAttackerRespawn();
@@ -75,8 +81,6 @@ struct point_t getDefenderRespawnPoint();
 struct percent_wall getPercentWall();
 
 struct round_counter getRoundCounter();
-
-int getWallCount();
 
 void setCharOnMap(char, int, int);
 
