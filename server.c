@@ -350,13 +350,32 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
 }
 
 bool isCastleChar(char c) {
-  return c == '-' || c == '|' || c == '+' || c == '*' || c == '/' || c == '\\';
+  return c == '-' || c == '|' || c == '+' || c == '*' || c == '/' || c == '\\' || c == '&';
 }
 bool isDestroyableCoverChar(char c) {
   return c >= '1' && c <='9';
 }
 bool isCoverChar(char c) {
   return c == '0' || isDestroyableCoverChar(c);
+}
+
+// Requires caller to hold map mutex!
+char* move_player(struct player_t* p, int newx, int newy) {
+  struct tile_t oldt;
+  struct tile_t newt;
+  int oldx = p->x;
+  int oldy = p->y;
+  p->x = newx;
+  p->y = newy;
+  getTileAt(&oldt, oldx, oldy);
+  getTileAt(&newt, newx, newy);
+  //sprintf(sendBuff,
+  //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
+  // update new location
+  sprintf(sendBuff, RENDER_FORMAT_STRING "\n" RENDER_FORMAT_STRING,
+          oldt.c, oldx, oldy, oldt.fg_color, oldt.bg_color,
+          newt.c, newx, newy, newt.fg_color, newt.bg_color);
+  return sendBuff;
 }
 
 // X and Y coordinates for this function are absolute
@@ -375,25 +394,130 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
   }
   else {
     // update former location
-    struct tile_t oldt;
-    struct tile_t newt;
-    int oldx = p->x;
-    int oldy = p->y;
-    p->x = x;
-    p->y = y;
-    getTileAt(&oldt, oldx, oldy);
-    getTileAt(&newt, x, y);
-    //sprintf(sendBuff,
-    //printf("%s moving to %d, %d\n", p->name, p->x, p->y);
-    // update new location
-    sprintf(sendBuff, RENDER_FORMAT_STRING "\n" RENDER_FORMAT_STRING,
-            oldt.c, oldx, oldy, oldt.fg_color, oldt.bg_color,
-            newt.c, player_list[0].x, player_list[0].y, newt.fg_color, newt.bg_color);
 
-    retval = sendBuff;
+    retval = move_player(p, x, y);
   }
   pthread_mutex_unlock(&map_mutex);
   return retval;
+}
+
+int get_quadrant(int x, int y) {
+  // Hope you were paying attention in algebra.
+  if (y <= 9) {
+    // top half
+    if (x <= 34) {
+      // top-left
+      return 1;
+    }
+    else {
+      // top-right
+      return 2;
+    }
+  }
+  else {
+    // bottom half
+    if (x <= 34) {
+      // bottom-left
+      return 4;
+    }
+    else {
+      // bottom-right
+      return 3;
+    }
+  }
+}
+
+struct point_t add_direction_vector(struct point_t location, int dir) {
+  struct point_t vector;
+  switch (dir) {
+    case 0:
+      vector.x = location.x - 1;
+      vector.y = location.y - 1;
+      break;
+    case 1:
+      vector.x = location.x;
+      vector.y = location.y - 1;
+      break;
+    case 2:
+      vector.x = location.x + 1;
+      vector.y = location.y - 1;
+      break;
+    case 3:
+      vector.x = location.x + 1;
+      vector.y = location.y;
+      break;
+    case 4:
+      vector.x = location.x + 1;
+      vector.y = location.y + 1;
+      break;
+    case 5:
+      vector.x = location.x;
+      vector.y = location.y + 1;
+      break;
+    case 6:
+      vector.x = location.x - 1;
+      vector.y = location.y + 1;
+      break;
+    case 7:
+      vector.x = location.x - 1;
+      vector.y = location.y;
+      break;
+  }
+  return vector;
+}
+
+int choose_dir_clockwise(int a, int b) {
+  switch (a) {
+    case 0:
+      switch(b) {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+          return b;
+        default:
+          return a;
+      }
+  }
+  return b;
+}
+
+char* try_defender_move_clockwise(struct player_t* p) {
+  pthread_mutex_lock(&map_mutex);
+  //int quad = get_quadrant(p->x, p->y);
+  // cyclical direction numbering to make my life not hell
+  // 0 1 2
+  // 7   3
+  // 6 5 4
+  struct point_t location = {.x = p->x, .y = p->y};
+  int option_a = -1;
+  int option_b = -1;
+  for (int i = 0; i < 8; i++) {
+    struct point_t new_location = add_direction_vector(location, i);
+    if (isCastleChar(getCharOnMap(new_location.x, new_location.y))) {
+      if (option_a < 0) {
+        option_a = i;
+      }
+      else {
+        option_b = i;
+        break;
+      }
+    }
+  }
+  // FIXME use actual heuristic here
+  int chosen_dir = choose_dir_clockwise(option_a, option_b);
+  
+  struct point_t final_location = add_direction_vector(location, chosen_dir);
+  char* retval = move_player(p, final_location.x, final_location.y);
+  pthread_mutex_unlock(&map_mutex);
+  return retval;
+}
+char* try_defender_move_counterclockwise(struct player_t* p) {
+  return NULL;
+}
+char* move_halfway_around_castle(struct player_t* p) {
+  return NULL;
 }
 
 char* shoot(struct player_t* p, int direction) {
@@ -402,8 +526,8 @@ char* shoot(struct player_t* p, int direction) {
 }
 
 void respawn(struct player_t* p) {
-  p->x = 3;
-  p->y = 3;
+  p->x = 23;
+  p->y = 4;
 }
 
 void destroy_bullet(int start) {
@@ -522,28 +646,51 @@ char* process_message(struct event_t* event) {
   else if (c == 'G') {
   // Game Start
     char *game_started = "GameIsStarting!";
-    sprintf(sendBuff, "%s %s %s %s", game_started, mapPath, a_team, b_team);
+    sprintf(sendBuff, "%s %s %s %s\n", game_started, mapPath, a_team, b_team);
+    for (int i = 0; i < client_count; i++) {
+      struct player_t* p = &player_list[i];
+      respawn(p);
+      char respawn[1024];
+      snprintf(respawn, sizeof respawn, RENDER_FORMAT_STRING "\n", PLAYER_CHAR, p->x, p->y, p->player_color, BACKGROUND_COLOR);
+      strcat(sendBuff, respawn);
+    }
     return sendBuff;
   }
   // move down
   else if (c == 'S' || c == 's') {
-    // TODO: check team here
-    return try_attacker_move(p, p->x, p->y+1);
+    if (is_attacker(p)) {
+      return try_attacker_move(p, p->x, p->y+1);
+    }
+    else {
+      return move_halfway_around_castle(p);
+    }
   }
-  // move up
+  // move up (invalid for defender)
   else if (c == 'W' || c == 'w') {
-    // TODO: check team here
-    return try_attacker_move(p, p->x, p->y-1);
+    if (is_attacker(p)) {
+      return try_attacker_move(p, p->x, p->y-1);
+    }
+    else {
+      return NULL;
+    }
   }
-  // move left
+  // move left / counterclockwise
   else if (c == 'A' || c == 'a') {
-    // TODO: check team here
-    return try_attacker_move(p, p->x-1, p->y);
+    if (is_attacker(p)) {
+      return try_attacker_move(p, p->x-1, p->y);
+    }
+    else {
+      return try_defender_move_counterclockwise(p);
+    }
   }
-  // move right
+  // move right / clockwise
   else if (c == 'D' || c == 'd') {
-    // TODO: check team here
-    return try_attacker_move(p, p->x+1, p->y);
+    if (is_attacker(p)) {
+      return try_attacker_move(p, p->x+1, p->y);
+    }
+    else {
+      return try_defender_move_clockwise(p);
+    }
   }
   else if (c == 'I' || c == 'i') {
     return shoot(p, 0);
@@ -553,11 +700,12 @@ char* process_message(struct event_t* event) {
   else if (c == 'M' || c == 'm') {
     printf("Map:\n%s\n", getMap());
     return NULL;
-  }
+  }/*
+  // debug: hold still
   else if (c == 'O' || c == 'o') {
-    sprintf(sendBuff, RENDER_FORMAT_STRING "\n", PLAYER_CHAR, p->x, p->y, 0, 1);
+    sprintf(sendBuff, RENDER_FORMAT_STRING, PLAYER_CHAR, p->x, p->y, 0, 1);
     return sendBuff;
-  }
+  }*/
   else {
     sprintf(sendBuff, "Keystroke: %s hit %c", p->name, c);
     return sendBuff;
@@ -600,10 +748,12 @@ void pop_message(void) {
       pthread_mutex_lock(&(p->player_write_mutex));
       //printf("%s", "Lock acquired.\n");
       if (event->c != 'U')
-        printf("    %c to %s\n", event->c, p->name);
+        printf("    %c to %s:\n", event->c, p->name);
       // print out newline-delimited instructions
       for (int line = 0; line < MAX_MESSAGE_LINES; line++) {
         char* nextLine = messageLines[line];
+        if (event->c != 'U')
+          printf("    %s\n", nextLine);
         if (nextLine == NULL) {
           break;
         }
