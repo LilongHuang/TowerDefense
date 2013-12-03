@@ -114,6 +114,8 @@ pthread_mutex_t next_event_mutex = PTHREAD_MUTEX_INITIALIZER;
 sem_t next_event_space_remaining;
 sem_t next_event_messages_waiting;
 
+bool game_over = false;
+
 // ===========================================================
 
 void init_player(struct player_t *p){
@@ -795,7 +797,7 @@ char* process_message(struct event_t* event) {
     return sendBuff;
   }
   else if (c == 'E') {
-    sprintf(sendBuff, "%s", "end");
+    sprintf(sendBuff, "%s", "end game");
     return sendBuff;
   }
   else if (c == 'F') {
@@ -815,16 +817,6 @@ char* process_message(struct event_t* event) {
   else if (c == 'J' || c == 'j') {
     return shoot(p, 3);
   }
-  // debug: show map in server log
-  else if (c == 'M' || c == 'm') {
-    printf("Map:\n%s\n", getMap());
-    return NULL;
-  }/*
-  // debug: hold still
-  else if (c == 'O' || c == 'o') {
-    sprintf(sendBuff, RENDER_FORMAT_STRING, PLAYER_CHAR, p->x, p->y, 0, 1);
-    return sendBuff;
-  }*/
   else {
     sprintf(sendBuff, "Keystroke: %s hit %c", p->name, c);
     return sendBuff;
@@ -856,6 +848,9 @@ void pop_message(void) {
     while((messageLines[i] = strtok_r(NULL, "\n", &saveptr)) != NULL) {
       //printf("%s\n", messageLines[i]);
       i++;
+    }
+    if (event->c == 'E') {
+      game_over = true;
     }
     
     // send message
@@ -898,6 +893,13 @@ void pop_message(void) {
   sem_post(&next_event_space_remaining);
 }
 
+bool is_valid_char(char c) {
+  return   c == 'W' || c == 'w' || c == 'A' || c == 'a' 
+	|| c == 'S' || c == 's' || c == 'D' || c == 'd' 
+	|| c == 'I' || c == 'i' || c == 'J' || c == 'j' 
+	|| c == 'K' || c == 'k' || c == 'L' || c == 'l';
+}
+
 void *client_thread(void *arg)
 {
   int connfd = *((int *)arg);
@@ -935,7 +937,7 @@ void *client_thread(void *arg)
   printf("%s", "Locked\n");
   pthread_mutex_unlock(&(player_list[0].player_mutex));
   printf("%s", "Released\n");*/
-  while (1)
+  while (!game_over)
   {
     if(sec_counter > 0){
       //sends each client the newly updated player list
@@ -953,8 +955,10 @@ void *client_thread(void *arg)
 	  // echo all input back to client
 	  //printf("Writing %d bytes to buffer\n", n);
           //write(connfd, player.recvBuff, n);
-	  printf("Pushing %c onto event queue from %s\n", player->recvBuff[0], player->name);
-	  push_message(player->recvBuff[0], player);
+	  if (is_valid_char(player->recvBuff[0])) {
+	    printf("Pushing %c onto event queue from %s\n", player->recvBuff[0], player->name);
+	    push_message(player->recvBuff[0], player);
+	  }
       }
       else {
 	// They disconnected-- release the client
@@ -968,6 +972,7 @@ void *client_thread(void *arg)
       //printf("Unlocked %s from read\n", player->name);
     }
   }
+  close(connfd);
   return NULL;
 }
 
@@ -985,20 +990,22 @@ void update_respawns() {
 
 void* update_thread(void *arg) {
   int updates_since_last_clock_tick = 0;
-  while (1) {
+  while (!game_over) {
     push_message('U', &SYSTEM_PLAYER);
     updates_since_last_clock_tick++;
     if (updates_since_last_clock_tick == UPDATES_PER_CLOCK_TICK) {
       match_timer--;
       push_message('T', &SYSTEM_PLAYER);
       update_respawns();
-      // printf("Tick: %i\n", match_timer);
+      printf("Tick: %i\n", match_timer);
+      printf("Round Index: %i\n", round_index);
       if (match_timer < 0) {
-	if (round_index == 1) {
+	
+        if (round_index == 1) {
 	  // begin round two
 	  round_index++;
 	  match_timer = getDefenderWin();
-	  loadMap(mapPath);
+	  //loadMap(mapPath);
 	  push_message('G', &SYSTEM_PLAYER);
 	}
 	else {
@@ -1010,6 +1017,7 @@ void* update_thread(void *arg) {
     }
     usleep(MICROSECONDS_BETWEEN_UPDATES);
   }
+  return NULL;
 }
 
 void *loading_thread(void *arg){
@@ -1033,7 +1041,7 @@ void *loading_thread(void *arg){
       fprintf(stderr, "Server unable to create update_thread\n");
     }
 
-  while (1) {
+  while (!game_over) {
     pop_message();
   }
   
@@ -1078,10 +1086,10 @@ int main(int argc, char *argv[])
     char *ghs = "game has already started";
     write(connfd, ghs, sizeof ghs);
     }*/
-
-  while(1)
+  int connfd;
+  while(!game_over)
   {
-    int connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
+    connfd = accept(listenfd, (struct sockaddr*) NULL, NULL);
     //printf("Accepted a connection on FD %i\n", connfd);
     pthread_t conn_thread;
     if (pthread_create(&conn_thread, NULL, client_thread, &connfd) != 0)
@@ -1100,5 +1108,5 @@ int main(int argc, char *argv[])
     }
     pthread_mutex_unlock(&team_array_mutex);
   }
-
+  close(connfd);
 }

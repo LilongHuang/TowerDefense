@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <errno.h>
 #include <arpa/inet.h>
@@ -264,10 +265,6 @@ void update_b_team(){
   }
 }
 
-bool is_valid_char(char c) {
-  return true;
-}
-
 void control_test() {
   scrollok(stdscr, 1);       // allow the window to scroll
   noecho();                  // don't echo characters
@@ -275,8 +272,8 @@ void control_test() {
   refresh();                 // update the screen
   standend();
   struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
-  int game_over = 1;
-  while (game_over) {
+  bool game_over = false;
+  while (!game_over) {
     switch (poll(pfds, 2, -1)) {
       case -1:
         perror("poll");
@@ -294,11 +291,11 @@ void control_test() {
             //printw("Client pressed '^%c'.\n", c + 64);
           else {*/
             //printw("Client pressed '%c'.\n", c);
-	  if (is_valid_char(c)) {  
-            sendBuff[0] = c;
-            sendBuff[1] = '\0';
-            send_to_server();
-          }
+	  
+          sendBuff[0] = c;
+          sendBuff[1] = '\0';
+          send_to_server();
+         
           //}
         }
         if ((pfds[1].revents & POLLIN) != 0) {
@@ -377,12 +374,14 @@ void control_test() {
 
 	    //for ending the round
 	    else if(strcmp(read_type, "GameIsStarting!")){
+	      mvprintw(25, 0, read_type);
 	      loadMap(mapNameFromServer);
 	    }
 
 	    //for game over
 	    else if(strcmp(read_type, "end")){
-	      game_over = 0;
+	      //game_over = true;
+	      mvprintw(25, 0, read_type);
 	    }
 	    
             /*mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
@@ -562,6 +561,7 @@ int main(int argc, char *argv[])
   //place_players();
   control_test();
   final_standings();
+  getch();
   endwin();
 
   close(sockfd);
