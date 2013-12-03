@@ -355,9 +355,6 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
   return *t;
 }
 
-bool isCastleChar(char c) {
-  return c == '-' || c == '|' || c == '+' || c == '*' || c == '/' || c == '\\' || c == '&';
-}
 bool isDestroyableCoverChar(char c) {
   return c >= '1' && c <='9';
 }
@@ -554,13 +551,19 @@ bool isSystemMessage(struct event_t* event) {
   return event->c == 'U' || event->c == 'T';
 }
 
-void push_message(const char m, struct player_t* player) {
+// This is a VERY dangerous function.
+// It should only be used if you need to push something to the queue
+// while you're already popping something off (like pushing a score event)
+// during the resolution of bullet collision).
+// 
+// If you ever have any doubt whether to use this or push_message,
+// for the love of concurrency, USE PUSH_MESSAGE INSTEAD.
+void push_message_without_mutex(const char m, struct player_t* player) {
   // WARNING: If this is updated to ever access more than the player's name,
   // update the system player's initialization appropriately!
 
   // capture event queue, and prepare to add a new event
   sem_wait(&next_event_space_remaining);
-  pthread_mutex_lock(&next_event_mutex);
   //printf(" - %s locking\n", player->name);
   // initialize event to put on queue
   struct event_t event;
@@ -574,6 +577,11 @@ void push_message(const char m, struct player_t* player) {
   // release resources
   sem_post(&next_event_messages_waiting);
   //printf("Completed push. Next event is #%i\n", event_count);
+}
+
+void push_message(const char m, struct player_t* player) {
+  pthread_mutex_lock(&next_event_mutex);
+  push_message_without_mutex(m, player);
   pthread_mutex_unlock(&next_event_mutex);
 }
 
@@ -616,6 +624,11 @@ int getRespawnTime(struct player_t* player) {
   }
 }
 
+void update_score(struct player_t* p, int i) {
+  p->score += i;
+  push_message_without_mutex('R', p);
+}
+
 char* update_bullets(void) {
   // advance all bullets forward
   pthread_mutex_lock(&map_mutex);
@@ -653,7 +666,7 @@ char* update_bullets(void) {
       setCharOnMap(target, b->x, b->y);
       // award points to defenders for destroying cover
       if (!is_attacker(b->owner)) {
-        b->owner->score += 1;
+        update_score(b->owner, 1);
       }
       destroyed = true;
     }
@@ -670,7 +683,7 @@ char* update_bullets(void) {
           // TODO write a "castle wall percentage" calculator in map.c
           // then call it here and add its output to the output of the function
           // award points to the attacker
-          
+          update_score(b->owner, 1);
         }
       }
       // regardless of team, you can't shoot through the castle
@@ -682,7 +695,7 @@ char* update_bullets(void) {
       struct player_t* player = &player_list[player_index];
       if (player->x == b->x && player->y == b->y && player->team != b->owner->team) {
 	// award owner kill points
-        b->owner->score += 20;
+        update_score(b->owner, 20);
         player->x = -1;
         player->y = -1;
         player->respawn_timer = getRespawnTime(player);
@@ -802,6 +815,11 @@ char* process_message(struct event_t* event) {
   }
   else if (c == 'E') {
     sprintf(sendBuff, "%s", "end game");
+    return sendBuff;
+  }
+  else if (c == 'R') {
+    // score!
+    sprintf(sendBuff, "score %i %i", p->player_color, p->score);
     return sendBuff;
   }
   else if (c == 'F') {

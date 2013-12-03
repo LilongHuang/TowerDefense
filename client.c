@@ -362,6 +362,7 @@ void control_test() {
               mvprintw(rc.y+1, rc.x, new_time);
               refresh();
               //printf("Time is now %s\n", new_time);
+              //mvprintw(25, 0, "Time is now %s\n", new_time);
             }
 
             //for updating castle percentage on battlefield
@@ -374,14 +375,14 @@ void control_test() {
             }
 
 	    //for ending the round
-	    else if(strcmp(read_type, "GameIsStarting!")){
-	      mvprintw(25, 0, read_type);
+	    else if(strcmp(read_type, "GameIsStarting!") == 0){
+	      //mvprintw(25, 0, "Game starting! %s\n", read_type);
 	      loadMap(mapNameFromServer);
 	      refresh();
 	    }
 
 	    //for game over
-	    else if(strcmp(read_type, "end")){
+	    else if(strcmp(read_type, "end") == 0){
 	      //game_over = true;
 	      mvprintw(24, 0, read_type);
               refresh();

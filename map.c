@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -202,8 +203,25 @@ struct round_counter getRoundCounter() {
         return round_counter_location[0];
 }
 
-int getWallCount() {
+bool isCastleChar(char c) {
+  return c == '-' || c == '|' || c == '+' || c == '*' || c == '/' || c == '\\' || c == '&';
+}
+
+int get_initial_wall_count() {
 	return wallCount;
+}
+int get_current_wall_count() {
+	int i = 0;
+	for (int y = 0; y < 20; y++) {
+		struct row_t r = list_row[y];
+		for (int x = 0; x < 70; x++) {
+			char c = r.content[x];
+			if (isCastleChar(c)) {
+				i++;
+			}
+		}
+	}
+	return i;
 }
 
 void setCharOnMap(char replacement, int x, int y) {
