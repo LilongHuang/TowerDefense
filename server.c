@@ -393,7 +393,7 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
   pthread_mutex_lock(&map_mutex);
   char c = getCharOnMap(x, y);
   char* retval;
-  if (x < 0 || x > 70 || y < 0 || y > 20) {
+  if (x < 0 || x > 69 || y < 0 || y > 19) {
     // nope, you're trying to move off the edge of the map
     retval = NULL;
   }
@@ -633,7 +633,7 @@ char* update_bullets(void) {
     }
     bool destroyed = false;
     // destroy bullets beyond the boundaries of the map
-    if (b->x < 0 || b->x > 70 || b->y < 0 || b->y > 20) {
+    if (b->x < 0 || b->x > 69 || b->y < 0 || b->y > 19) {
       destroyed = true;
     }
     
@@ -745,6 +745,10 @@ char* process_message(struct event_t* event) {
   else if (c == 'G') {
   // Game Start
     char *game_started = "GameIsStarting!";
+    loadMap(mapPath);
+    if (round_index == 2) {
+      //loadMapSecondRound(mapPath);
+    }
     sprintf(sendBuff, "%s %s %s %s\n", game_started, mapPath, a_team, b_team);
     for (int i = 0; i < client_count; i++) {
       struct player_t* p = &player_list[i];

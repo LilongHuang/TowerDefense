@@ -86,4 +86,6 @@ void initBoard();
 
 void teamInfoMap();
 
+void loadMapSecondRound(char[1024]);
+
 void loadMap(char[1024]);

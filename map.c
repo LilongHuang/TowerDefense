@@ -264,6 +264,52 @@ void teamInfoMap() {
                         , getAuthor());
 }
 
+void loadMapSecondRound(char mapFile[1024]) {
+	memset(castle_strength, 0, sizeof castle_strength);
+
+        FILE *file;
+
+        file = fopen(mapFile, "r");
+        // initialize map to empty
+        memset(&map, ' ', sizeof map);
+
+        if (file == NULL) {
+                perror ("Error opening file");
+                exit(EXIT_FAILURE);
+	 } else {
+                int i = 0;
+                while (fgets(buffer, 1024, file) != NULL) {
+                        if (i == 0) {
+                                strncpy(mapName, buffer, strlen(buffer)-1);
+                        } else if (i == 1) {
+                                strncpy(authorName, buffer, strlen(buffer)-1);
+                        } else if (i == 2) {
+                                strncpy(castle, buffer, strlen(buffer)-1);
+                        } else if (i == 3) {
+                                strncpy(attacker, buffer, strlen(buffer)-1);
+                        } else if (i == 4) {
+                                strncpy(defender, buffer, strlen(buffer)-1);
+                        } else if (i >= 7) {
+                                int mapRow = i - 7;
+                                char* printable_line = replace_str(&buffer[2], "%", "%%");
+                                printable_line = replace_str(printable_line, "\n", " ");
+
+                                struct row_t row;
+                                strncpy(row.content, printable_line, strlen(printable_line) + 1);
+                                list_row[mapRow] = row;
+                                while (strlen(list_row[mapRow].content) < 70) {
+                                        strncat(list_row[mapRow].content, " ", 1);
+                                }
+				mvprintw(i - 6, 0, list_row[mapRow].content); 
+			}			                        
+                i++;
+                if (i > 27) break;
+		}
+	}
+                fclose(file);
+                //fprintf(stdout, "%s", getMap());
+}
+
 void loadMap(char mapFile[1024]) {
 	memset(castle_strength, 0, sizeof castle_strength);
 	
@@ -332,34 +378,14 @@ void loadMap(char mapFile[1024]) {
 						round_counter_location[0].y = i - 7;
 					}
 				}
-				mvprintw(i - 6, 0, list_row[mapRow].content);
+				if (i < 27) {
+					mvprintw(i - 6, 0, list_row[mapRow].content);
+				}
 			}
 			i++;
-			if (i > 27) break;
+			if (i > 26) break;
 		}
 		fclose(file);
 		//fprintf(stdout, "%s", getMap());
-	};
-
-	/*	
-	fprintf(stdout, "%s\n", getMapName());
-	fprintf(stdout, "%s\n", getAuthor());
-	fprintf(stdout, "%d", getCastleStrength());
-	printf("\n");
-	fprintf(stdout, "%d", getCastleTouch());
-	printf("\n");
-	
-	fprintf(stdout, "%d", getAttackerWin());
-	printf("\n");
-	fprintf(stdout, "%d", getAttackerShots());
-        printf("\n");
-	fprintf(stdout, "%d", getAttackerRespawn());
-        printf("\n");
-	fprintf(stdout, "%d", getDefenderWin());
-        printf("\n");
-	fprintf(stdout, "%d", getDefenderShots());
-        printf("\n");
-	fprintf(stdout, "%d", getDefenderRespawn());
-        printf("\n");
-	*/
+	}
 }

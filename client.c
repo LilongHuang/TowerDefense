@@ -360,7 +360,7 @@ void control_test() {
               sscanf(recvBuff, "%s %s", read_type, new_time);
               struct round_counter rc = getRoundCounter();
               mvprintw(rc.y+1, rc.x, new_time);
-              
+              refresh();
               //printf("Time is now %s\n", new_time);
             }
 
@@ -370,18 +370,21 @@ void control_test() {
               sscanf(recvBuff, "%s %s", read_type, new_percent);
               struct percent_wall pw = getPercentWall();
               mvprintw(pw.y, pw.x, new_percent);
+              refresh();
             }
 
 	    //for ending the round
 	    else if(strcmp(read_type, "GameIsStarting!")){
 	      mvprintw(25, 0, read_type);
 	      loadMap(mapNameFromServer);
+	      refresh();
 	    }
 
 	    //for game over
 	    else if(strcmp(read_type, "end")){
 	      //game_over = true;
-	      mvprintw(25, 0, read_type);
+	      mvprintw(24, 0, read_type);
+              refresh();
 	    }
 	    
             /*mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
