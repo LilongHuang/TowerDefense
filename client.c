@@ -33,6 +33,7 @@ struct player_t {
   int y;
   int player_color;
   int symbol;
+  int score;
 };
 
 struct player_t Aplayer_list[5];
@@ -208,6 +209,32 @@ void parse_message(char* message) {
   refresh();
 }
 
+void update_a_team(){
+  int a_pos = 1;
+  for(int i = 0; i < A_Player_Count; i++){
+    struct player_t p = Aplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(a_pos, 71, p.name);
+    char temp_score[512];
+    sprintf(temp_score, "%d", p.score);
+    mvprintw(a_pos+1, 71, temp_score);
+    attroff(COLOR_PAIR(p.player_color));
+  }
+}
+
+void update_b_team(){
+  int b_pos = 1;
+  for(int i = 0; i < B_Player_Count; i++){
+    struct player_t p = Bplayer_list[i];
+    attron(COLOR_PAIR(p.player_color));
+    mvprintw(b_pos, 71, p.name);
+    char temp_score[512];
+    sprintf(temp_score, "%d", p.score);
+    mvprintw(b_pos+1, 71, temp_score);
+    attroff(COLOR_PAIR(p.player_color));
+  }
+}
+
 void control_test() {
   scrollok(stdscr, 1);       // allow the window to scroll
   noecho();                  // don't echo characters
@@ -243,6 +270,67 @@ void control_test() {
           // server
           ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
+
+	    char read_type[256];
+            sscanf(recvBuff, "%s", read_type);
+
+            //for updating player scores
+            if(strcmp(read_type, "score") == 0){
+              char color[10];
+              char new_score[512];
+              sscanf(recvBuff, "%s %s %s", read_type, color, new_score);
+              for(int i = 0; i < A_Player_Count; i++){
+                struct player_t temp_player = Aplayer_list[i];
+                if(temp_player.player_color == atoi(color)){
+                  temp_player.score = atoi(new_score);
+                  update_a_team();
+                  break;
+                }
+              }
+
+              for(int i = 0; i < B_Player_Count; i++){
+                struct player_t temp_player = Aplayer_list[i];
+                if(temp_player.player_color == atoi(color)){
+                  temp_player.score = atoi(new_score);
+                  update_b_team();
+                  break;
+                }
+              }
+            }
+
+            //for updating characters on battlefield
+            if(strcmp(read_type, "render") == 0){
+              char c[512];
+              char temp_x[512];
+              char temp_y[512];
+              char temp_color_foreground[512];
+              char temp_color_background[512];
+              sscanf(recvBuff, "%s %s %s %s %s %s", read_type, c, temp_x, temp_y, temp_color_foreground, temp_color_background);
+              int x = atoi(temp_x);
+              int y = atoi(temp_y);
+              int color_a = atoi(temp_color_foreground);
+              int color_b = atoi(temp_color_background);
+              attron(COLOR_PAIR(color_a));
+              mvprintw(y, x, c);
+              attroff(COLOR_PAIR(color_a));
+            }
+
+	    //for updating timer on battlefield
+            if(strcmp(read_type, "timer") == 0){
+              char new_time[128];
+              sscanf(recvBuff, "%s %s", read_type, new_time);
+              struct round_counter rc = getRoundCounter();
+              mvprintw(rc.y, rc.x, new_time);
+            }
+
+            //for updating castle percentage on battlefield
+            if(strcmp(read_type, "castle") == 0){
+              char new_percent[128];
+              sscanf(recvBuff, "%s %s", read_type, new_percent);
+              struct percent_wall pw = getPercentWall();
+              mvprintw(pw.y, pw.x, new_percent);
+            }
+	    
             mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
             parse_message(recvBuff);
 	    for(int i = 0; i < 20; i++) {
