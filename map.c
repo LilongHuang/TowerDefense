@@ -21,6 +21,8 @@ char defenderShots[1024];
 char defenderRespawn[1024];
 char map[1024];
 
+int castle_strength[1024];
+
 char castle[1024];
 char attacker[1024];
 char defender[1024];
@@ -66,7 +68,7 @@ char* getAuthor() {
 	return authorName;
 }
 
-int getCastleStrength() {
+int getDefaultCastleStrength() {
 	char* subBuffer = strstr(castle, "strength");
 	subBuffer += 9;
 	char* subBuffer2 = strstr(castle, "touch");
@@ -75,6 +77,13 @@ int getCastleStrength() {
 	strncpy(castleStrength, subBuffer, diffBytes - 1);
 	int value = atoi(castleStrength);
 	return value;
+}
+
+void set_castle_strength(int str, int x, int y) {
+	castle_strength[x + 70 * y] = str;
+}
+int get_castle_strength(int x, int y) {
+	return castle_strength[x + 70 * y];
 }
 
 int getCastleTouch() {
@@ -256,6 +265,7 @@ void teamInfoMap() {
 }
 
 void loadMap(char mapFile[1024]) {
+	memset(castle_strength, 0, sizeof castle_strength);
 	
 	FILE *file;
 		
@@ -302,11 +312,13 @@ void loadMap(char mapFile[1024]) {
 						defender_respawn_location_list[defenderRespawnPointCount].x = j;
                                                 defender_respawn_location_list[defenderRespawnPointCount].y = i - 7;
                                                 defenderRespawnPointCount++;
+						set_castle_strength(getDefaultCastleStrength(), j-2, i-7);
 						wallCount++;
 					}
 					
 					else if (buffer[actualLocation] == '-' || buffer[actualLocation] == '|' ||
 						 buffer[actualLocation] == '/' || buffer[actualLocation] == '\\') {
+						set_castle_strength(getDefaultCastleStrength(), j-2, i-7);
 						wallCount++;
 					}
 

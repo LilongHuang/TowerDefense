@@ -53,8 +53,10 @@ char* getMap();
 char* getMapName();
 char* getAuthor();
 
-int getCastleStrength();
+int getDefaultCastleStrength();
 int getCastleTouch();
+void set_castle_strength(int, int, int);
+int get_castle_strength(int, int);
 
 int getAttackerWin();
 int getAttackerShots();

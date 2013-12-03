@@ -326,6 +326,8 @@ void control_test() {
               sscanf(recvBuff, "%s %s", read_type, new_time);
               struct round_counter rc = getRoundCounter();
               mvprintw(rc.y, rc.x, new_time);
+              
+              printf("Time is now %s\n", new_time);
             }
 
             //for updating castle percentage on battlefield

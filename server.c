@@ -42,6 +42,7 @@ struct player_t
   int fd;
   int bullets;
   int player_color;
+  int respawn_timer;
   char recvBuff[1024];
   char sendBuff[1024];
 };
@@ -61,15 +62,16 @@ struct bullet_t bullet_list[1024];
 pthread_mutex_t bullet_array_mutex = PTHREAD_MUTEX_INITIALIZER;
 int bullet_count;
 
-typedef enum {MOVE_REL, MOVE_ABS, SHOOT} event_type_t;
-
 struct event_t
 {
-  event_type_t type;
+  // possible events:
+  // U for Update.
+  // T for (clock) Tick.
+  // WASD for client movement inputs
+  // IJKL for client shoot inputs
+  // F for Force Rerender (of this player's location)
   char c;
   struct player_t* player;
-  //int rows;
-  //int cols;
 };
 
 int player_colors =11;
@@ -122,6 +124,7 @@ void init_player(struct player_t *p){
   p -> x = 3;
   p -> y = 3;
   p -> score = 0;
+  p -> respawn_timer = -1;
   p -> player_color = player_colors;
   //p -> symbol = UNASSIGNED_SYMBOL;
   player_colors++;
@@ -326,16 +329,16 @@ struct tile_t getTileAt(struct tile_t* t, int x, int y) {
   // (after bullet, so it'll have higher priority to be drawn over bullets)
   for (int i = 0; i < client_count; i++) {
     struct player_t* p = &player_list[i];
-    printf("Checking player %s (%d, %d) against %d, %d\n", p->name, p->x, p->y, x, y);
+    //printf("Checking player %s (%d, %d) against %d, %d\n", p->name, p->x, p->y, x, y);
     if (p->x == x && p->y == y) {
       if (t->c == ' ') {
-        printf("Found a match! '%c' -> '%c'\n", t->c, PLAYER_CHAR);
+        //printf("Found a match! '%c' -> '%c'\n", t->c, PLAYER_CHAR);
         t->c = PLAYER_CHAR;
         t->fg_color = p->player_color;
         modified = true;
       }
       else if (t->c == PLAYER_CHAR) {
-        printf("Found overlapping players at %i, %i!\n", x, y);
+        //printf("Found overlapping players at %i, %i!\n", x, y);
         // two players there; assign it team color
         t->bg_color = p->player_color;
         modified = true;
@@ -545,15 +548,45 @@ char* shoot(struct player_t* p, int direction) {
   return NULL;
 }
 
+bool isSystemMessage(struct event_t* event) {
+  return event->c == 'U' || event->c == 'T';
+}
+
+void push_message(const char m, struct player_t* player) {
+  // WARNING: If this is updated to ever access more than the player's name,
+  // update the system player's initialization appropriately!
+
+  // capture event queue, and prepare to add a new event
+  sem_wait(&next_event_space_remaining);
+  pthread_mutex_lock(&next_event_mutex);
+  //printf(" - %s locking\n", player->name);
+  // initialize event to put on queue
+  struct event_t event;
+  event.c = m;
+  event.player = player;
+  if (!isSystemMessage(&event))
+    printf(">> Adding %c by %s\n", event.c, player->name);
+  // put event on queue
+  next_event[event_count] = event;
+  event_count++;
+  // release resources
+  sem_post(&next_event_messages_waiting);
+  //printf("Completed push. Next event is #%i\n", event_count);
+  pthread_mutex_unlock(&next_event_mutex);
+}
+
 void respawn(struct player_t* p) {
   if (is_attacker(p)) {
-    p->x = 3;
-    p->y = 3;
+    struct point_t target = getAttackerRespawnPoint();
+    p->x = target.x;
+    p->y = target.y;
   }
   else {
-    p->x = 23;
-    p->y = 4;
+    struct point_t target = getDefenderRespawnPoint();
+    p->x = target.x;
+    p->y = target.y;
   }
+  //push_message('F', p);
 }
 
 void destroy_bullet(int start) {
@@ -569,6 +602,15 @@ int getMaxShots(struct player_t* p) {
   }
   else {
     return getDefenderShots();
+  }
+}
+
+int getRespawnTime(struct player_t* player) {
+  if (is_attacker(player)) {
+    return getAttackerRespawn();
+  }
+  else {
+    return getDefenderRespawn();
   }
 }
 
@@ -613,12 +655,21 @@ char* update_bullets(void) {
       destroyed = true;
     }
     // castle tiles
-    else if (isCastleChar(target) && is_attacker(b->owner)) {
-      // TODO decrement strength of castle walls
-      target = '&';
-      setCharOnMap(target, b->x, b->y);
-      // TODO write a "castle wall percentage" calculator in map.c
-      // then call it here and add its output to the output of the function
+    else if (isCastleChar(target)) {
+      if (is_attacker(b->owner)) {
+        // TODO decrement strength of castle walls
+        int str = get_castle_strength(b->x, b->y);
+        str--;
+        set_castle_strength(str, b->x, b->y);
+        if (str <= 0) {
+          target = '&';
+          setCharOnMap(target, b->x, b->y);
+          // TODO write a "castle wall percentage" calculator in map.c
+          // then call it here and add its output to the output of the function
+          // award points to the attacker
+        }
+      }
+      // regardless of team, you can't shoot through the castle
       destroyed = true;
     }
     
@@ -629,6 +680,10 @@ char* update_bullets(void) {
 	// award owner kill points
         b->owner->score += 20;
 	// TODO force player to respawn
+        player->x = 0;
+        player->y = 0;
+        // FIXME
+        player->respawn_timer = getRespawnTime(player);
 	//   maybe set x/y to -1 and then start a spawn timer
         destroyed = true;
       }
@@ -739,6 +794,11 @@ char* process_message(struct event_t* event) {
     // concurrency-- FIXME
     sprintf(sendBuff, "timer %i", match_timer);
   }
+  else if (c == 'F') {
+    // Force Rerender
+    sprintf(sendBuff, RENDER_FORMAT_STRING, PLAYER_CHAR, p->x, p->y, p->player_color, BACKGROUND_COLOR);
+    return sendBuff;
+  }
   else if (c == 'I' || c == 'i') {
     return shoot(p, 0);
   }
@@ -766,10 +826,6 @@ char* process_message(struct event_t* event) {
     return sendBuff;
   }
   return NULL;
-}
-
-bool isSystemMessage(struct event_t* event) {
-  return event->c == 'U' || event->c == 'T';
 }
 
 void pop_message(void) {
@@ -836,30 +892,6 @@ void pop_message(void) {
   pthread_mutex_unlock(&next_event_mutex);
   pthread_mutex_unlock(&team_array_mutex);
   sem_post(&next_event_space_remaining);
-}
-
-void push_message(const char m, struct player_t* player) {
-  // WARNING: If this is updated to ever access more than the player's name,
-  // update the system player's initialization appropriately!
-
-  // capture event queue, and prepare to add a new event
-  sem_wait(&next_event_space_remaining);
-  pthread_mutex_lock(&next_event_mutex);
-  //printf(" - %s locking\n", player->name);
-  // initialize event to put on queue
-  struct event_t event;
-  event.type = SHOOT;
-  event.c = m;
-  event.player = player;
-  if (!isSystemMessage(&event))
-    printf(">> Adding %c by %s\n", event.c, player->name);
-  // put event on queue
-  next_event[event_count] = event;
-  event_count++;
-  // release resources
-  sem_post(&next_event_messages_waiting);
-  //printf("Completed push. Next event is #%i\n", event_count);
-  pthread_mutex_unlock(&next_event_mutex);
 }
 
 void *client_thread(void *arg)
@@ -935,6 +967,18 @@ void *client_thread(void *arg)
   return NULL;
 }
 
+void update_respawns() {
+  pthread_mutex_lock(&team_array_mutex);
+  for (int i = 0; i < client_count; i++) {
+    struct player_t* p = &player_list[i];
+    p->respawn_timer--;
+    if (p->respawn_timer == 0) {
+      respawn(p);
+    }
+  }
+  pthread_mutex_unlock(&team_array_mutex);
+}
+
 void* update_thread(void *arg) {
   int updates_since_last_clock_tick = 0;
   while (1) {
@@ -942,7 +986,8 @@ void* update_thread(void *arg) {
     updates_since_last_clock_tick++;
     if (updates_since_last_clock_tick == UPDATES_PER_CLOCK_TICK) {
       match_timer--;
-      //push_message('T', &SYSTEM_PLAYER);
+      push_message('T', &SYSTEM_PLAYER);
+      update_respawns();
       printf("%s", "Tick\n");
       updates_since_last_clock_tick = 0;
     }
