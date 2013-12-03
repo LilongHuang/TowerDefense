@@ -271,7 +271,8 @@ void control_test() {
   refresh();                 // update the screen
   standend();
   struct pollfd pfds[] = { {STDIN_FILENO, POLLIN, 0}, {sockfd, POLLIN, 0} };
-  while (1) {
+  int game_over = 1;
+  while (game_over) {
     switch (poll(pfds, 2, -1)) {
       case -1:
         perror("poll");
@@ -352,7 +353,7 @@ void control_test() {
             }
 
 	    //for updating timer on battlefield
-            if(strcmp(read_type, "timer") == 0){
+            else if(strcmp(read_type, "timer") == 0){
               char new_time[128];
               sscanf(recvBuff, "%s %s", read_type, new_time);
               struct round_counter rc = getRoundCounter();
@@ -362,12 +363,22 @@ void control_test() {
             }
 
             //for updating castle percentage on battlefield
-            if(strcmp(read_type, "castle") == 0){
+            else if(strcmp(read_type, "castle") == 0){
               char new_percent[128];
               sscanf(recvBuff, "%s %s", read_type, new_percent);
               struct percent_wall pw = getPercentWall();
               mvprintw(pw.y, pw.x, new_percent);
             }
+
+	    //for ending the round
+	    else if(strcmp(read_type, "GameIsStarting!")){
+	      loadMap(mapNameFromServer);
+	    }
+
+	    //for game over
+	    else if(strcmp(read_type, "end")){
+	      game_over = 0;
+	    }
 	    
             /*mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
 	    for(int i = 0; i < 20; i++) {
