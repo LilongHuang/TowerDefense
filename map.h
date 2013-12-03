@@ -1,5 +1,5 @@
 // Signals
-#define RENDER_FORMAT_STRING "render %c %i %i %i %i"
+#define RENDER_FORMAT_STRING "render %i %i %i %i %i"
 #define BACKGROUND_COLOR 0
 
 char buffer[8 * 1024];
@@ -73,6 +73,8 @@ struct point_t getDefenderRespawnPoint();
 struct percent_wall getPercentWall();
 
 struct round_counter getRoundCounter();
+
+int getWallCount();
 
 void setCharOnMap(char, int, int);
 

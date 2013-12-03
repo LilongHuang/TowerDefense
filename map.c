@@ -193,6 +193,10 @@ struct round_counter getRoundCounter() {
         return round_counter_location[0];
 }
 
+int getWallCount() {
+	return wallCount;
+}
+
 void setCharOnMap(char replacement, int x, int y) {
 	list_row[y].content[x] = replacement;
 }
@@ -294,18 +298,24 @@ void loadMap(char mapFile[1024]) {
 						attackerRespawnPointCount++;
 					} 
 
-					if (buffer[actualLocation] == '*' || buffer[actualLocation] == '+') {
+					else if (buffer[actualLocation] == '*' || buffer[actualLocation] == '+') {
 						defender_respawn_location_list[defenderRespawnPointCount].x = j;
                                                 defender_respawn_location_list[defenderRespawnPointCount].y = i - 7;
                                                 defenderRespawnPointCount++;
+						wallCount++;
+					}
+					
+					else if (buffer[actualLocation] == '-' || buffer[actualLocation] == '|' ||
+						 buffer[actualLocation] == '/' || buffer[actualLocation] == '\\') {
+						wallCount++;
 					}
 
-					if (buffer[actualLocation] == '%') {
+					else if (buffer[actualLocation] == '%') {
 						percent_wall_location[0].x = j;
 						percent_wall_location[0].y = i - 7;
 					}
 
-					if (buffer[actualLocation] == '#') {
+					else if (buffer[actualLocation] == '#') {
 						round_counter_location[0].x = j;
 						round_counter_location[0].y = i - 7;
 					}

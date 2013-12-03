@@ -308,11 +308,16 @@ void control_test() {
               sscanf(recvBuff, "%s %s %s %s %s %s", read_type, c, temp_x, temp_y, temp_color_foreground, temp_color_background);
               int x = atoi(temp_x);
               int y = atoi(temp_y);
+              int char_index = atoi(c);
+              c[0] = (char)char_index;
+              c[1] = '\0';
               int color_a = atoi(temp_color_foreground);
               int color_b = atoi(temp_color_background);
               attron(COLOR_PAIR(color_a));
-              mvprintw(y, x, c);
+              mvprintw(y+1, x, c);
+              move(25, 0);
               attroff(COLOR_PAIR(color_a));
+              refresh();
             }
 
 	    //for updating timer on battlefield
@@ -331,11 +336,10 @@ void control_test() {
               mvprintw(pw.y, pw.x, new_percent);
             }
 	    
-            mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
-            parse_message(recvBuff);
+            /*mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
 	    for(int i = 0; i < 20; i++) {
 	      mvprintw(i + 1, 0, list_row[i].content);
-	    }	   
+	    }*/	   
 	     
           }
           else {

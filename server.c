@@ -19,7 +19,8 @@
 #define players_per_team 5
 #define TIMER_START 5
 #define EVENT_QUEUE_SIZE 20
-#define MILLIS_BETWEEN_UPDATES 500
+#define MILLIS_BETWEEN_UPDATES 250
+#define UPDATES_PER_CLOCK_TICK 4
 #define MAX_MESSAGE_LINES 100
 
 #define PLAYER_CHAR 'O'
@@ -87,6 +88,7 @@ int client_count = 0;
 
 int sec_counter = TIMER_START;
 int round_index = 0;
+int match_timer;
 
 struct player_t player_list[10];
 pthread_mutex_t team_array_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -465,31 +467,12 @@ struct point_t add_direction_vector(struct point_t location, int dir) {
   }
   return vector;
 }
-
-int choose_dir_clockwise(int a, int b) {
-  switch (a) {
-    case 0:
-      switch(b) {
-        case 0:
-        case 1:
-        case 2:
-        case 3:
-        case 4:
-          return b;
-        default:
-          return a;
-      }
-  }
-  return b;
-}
-
+// cyclical direction numbering to make my life not hell
+// 0 1 2
+// 7   3
+// 6 5 4
 char* try_defender_move_clockwise(struct player_t* p) {
   pthread_mutex_lock(&map_mutex);
-  //int quad = get_quadrant(p->x, p->y);
-  // cyclical direction numbering to make my life not hell
-  // 0 1 2
-  // 7   3
-  // 6 5 4
   struct point_t location = {.x = p->x, .y = p->y};
   int option_a = -1;
   int option_b = -1;
@@ -506,7 +489,7 @@ char* try_defender_move_clockwise(struct player_t* p) {
     }
   }
   // FIXME use actual heuristic here
-  int chosen_dir = choose_dir_clockwise(option_a, option_b);
+  int chosen_dir = option_a > option_b ? option_a : option_b;
   
   struct point_t final_location = add_direction_vector(location, chosen_dir);
   char* retval = move_player(p, final_location.x, final_location.y);
@@ -514,9 +497,37 @@ char* try_defender_move_clockwise(struct player_t* p) {
   return retval;
 }
 char* try_defender_move_counterclockwise(struct player_t* p) {
-  return NULL;
+  pthread_mutex_lock(&map_mutex);
+  struct point_t location = {.x = p->x, .y = p->y};
+  int option_a = -1;
+  int option_b = -1;
+  for (int i = 0; i < 8; i++) {
+    struct point_t new_location = add_direction_vector(location, i);
+    if (isCastleChar(getCharOnMap(new_location.x, new_location.y))) {
+      if (option_a < 0) {
+        option_a = i;
+      }
+      else {
+        option_b = i;
+        break;
+      }
+    }
+  }
+  // FIXME use actual heuristic here
+  int chosen_dir = option_a < option_b ? option_a : option_b;
+  
+  struct point_t final_location = add_direction_vector(location, chosen_dir);
+  char* retval = move_player(p, final_location.x, final_location.y);
+  pthread_mutex_unlock(&map_mutex);
+  return retval;
 }
 char* move_halfway_around_castle(struct player_t* p) {
+  /*int distance = getWallCount() / 2 - 1;
+  char* start = try_defender_move_clockwise(p);
+  char* middle = strstr(start, "\n");
+  middle = '\0';
+  printf("%s\n", start);
+  return start;*/
   return NULL;
 }
 
@@ -526,8 +537,14 @@ char* shoot(struct player_t* p, int direction) {
 }
 
 void respawn(struct player_t* p) {
-  p->x = 23;
-  p->y = 4;
+  if (is_attacker(p)) {
+    p->x = 3;
+    p->y = 3;
+  }
+  else {
+    p->x = 23;
+    p->y = 4;
+  }
 }
 
 void destroy_bullet(int start) {
@@ -692,6 +709,10 @@ char* process_message(struct event_t* event) {
       return try_defender_move_clockwise(p);
     }
   }
+  else if (c == 'T') {
+    // concurrency-- FIXME
+    sprintf(sendBuff, "timer %i", match_timer);
+  }
   else if (c == 'I' || c == 'i') {
     return shoot(p, 0);
   }
@@ -790,7 +811,7 @@ void push_message(const char m, struct player_t* player) {
   event.type = SHOOT;
   event.c = m;
   event.player = player;
-  if (event.c != 'U')
+  if (event.c != 'U' && event.c != 'T')
     printf(">> Adding %c by %s\n", event.c, player->name);
   // put event on queue
   next_event[event_count] = event;
@@ -875,8 +896,15 @@ void *client_thread(void *arg)
 }
 
 void* update_thread(void *arg) {
+  int updates_since_last_clock_tick = 0;
   while (1) {
     push_message('U', &SYSTEM_PLAYER);
+    updates_since_last_clock_tick++;
+    if (updates_since_last_clock_tick == UPDATES_PER_CLOCK_TICK) {
+      match_timer--;
+      push_message('T', &SYSTEM_PLAYER);
+      updates_since_last_clock_tick = 0;
+    }
     usleep(MILLIS_BETWEEN_UPDATES);
   }
 }
@@ -894,6 +922,7 @@ void *loading_thread(void *arg){
   push_message('G', &SYSTEM_PLAYER);
   round_index++;
   loadMap(mapPath);
+  match_timer = getDefenderWin();
   
   pthread_t upd_thread;
     if (pthread_create(&upd_thread, NULL, update_thread, NULL) != 0)
