@@ -403,9 +403,9 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
 
 int get_quadrant(int x, int y) {
   // Hope you were paying attention in algebra.
-  if (y <= 10) {
+  if (y <= 9) {
     // top half
-    if (x <= 35) {
+    if (x <= 34) {
       // top-left
       return 1;
     }
@@ -416,7 +416,7 @@ int get_quadrant(int x, int y) {
   }
   else {
     // bottom half
-    if (x <= 35) {
+    if (x <= 34) {
       // bottom-left
       return 4;
     }
@@ -465,43 +465,51 @@ struct point_t add_direction_vector(struct point_t location, int dir) {
   }
   return vector;
 }
+
+int choose_dir_clockwise(int a, int b) {
+  switch (a) {
+    case 0:
+      switch(b) {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+          return b;
+        default:
+          return a;
+      }
+  }
+  return b;
+}
+
 char* try_defender_move_clockwise(struct player_t* p) {
   pthread_mutex_lock(&map_mutex);
-  int quad = get_quadrant(p->x, p->y);
+  //int quad = get_quadrant(p->x, p->y);
   // cyclical direction numbering to make my life not hell
   // 0 1 2
   // 7   3
   // 6 5 4
-  int start_dir;
-  switch(quad) {
-    case 1:
-      // left, up, right, down
-      start_dir = 7;
-      break;
-    case 2:
-      // up, right, down, left
-      start_dir = 1;
-      break;
-    case 3:
-      // right, down, left, up
-      start_dir = 3;
-      break;
-    case 4:
-      // down left, up, right
-      start_dir = 5;
-      break;
-  }
   struct point_t location = {.x = p->x, .y = p->y};
-  char* retval;
-  for (int i = 0; i < 7; i++) {
-    struct point_t new_location = add_direction_vector(location, start_dir);
+  int option_a = -1;
+  int option_b = -1;
+  for (int i = 0; i < 8; i++) {
+    struct point_t new_location = add_direction_vector(location, i);
     if (isCastleChar(getCharOnMap(new_location.x, new_location.y))) {
-      retval = move_player(p, new_location.x, new_location.y);
-      printf("Moved in direction %i, in quadrant%i\n", start_dir, quad);
-      break;
+      if (option_a < 0) {
+        option_a = i;
+      }
+      else {
+        option_b = i;
+        break;
+      }
     }
-    start_dir = (start_dir+1) % 8;
   }
+  // FIXME use actual heuristic here
+  int chosen_dir = choose_dir_clockwise(option_a, option_b);
+  
+  struct point_t final_location = add_direction_vector(location, chosen_dir);
+  char* retval = move_player(p, final_location.x, final_location.y);
   pthread_mutex_unlock(&map_mutex);
   return retval;
 }

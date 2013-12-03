@@ -1,5 +1,5 @@
 // Signals
-#define RENDER_FORMAT_STRING "render char%c x%i y%i colora%i colorb%i"
+#define RENDER_FORMAT_STRING "render %c %i %i %i %i"
 #define BACKGROUND_COLOR 0
 
 char buffer[8 * 1024];
