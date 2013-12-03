@@ -39,12 +39,7 @@ struct round_counter {
 	int y;
 };
 
-struct attacker_respawn_location {
-	int x;
-	int y;
-};
-
-struct defender_respawn_location {
+struct respawn_location {
 	int x;
 	int y;
 };
@@ -55,8 +50,8 @@ struct row_t {
 
 struct round_counter round_counter_location[10];
 struct percent_wall percent_wall_location[10];
-struct attacker_respawn_location attacker_respawn_location_list[1024];
-struct defender_respawn_location defender_respawn_location_list[1024];
+struct respawn_location attacker_respawn_location_list[1024];
+struct respawn_location defender_respawn_location_list[1024];
 struct row_t list_row[20];
 
 char* getMap() {
@@ -176,14 +171,14 @@ char getCharOnMap(int x, int y) {
 
 //randomly get a respawn pointi
 
-struct attacker_respawn_location getAttackerRespawnPoint() {
+struct respawn_location getAttackerRespawnPoint() {
 	srand(time(NULL));
         int ran = rand();
         int rand_capped = ran % (attackerRespawnPointCount - 1);  //between 0 respawnPointCount
 	return attacker_respawn_location_list[rand_capped];
 }
 
-struct defender_respawn_location getDefenderRespawnPoint() {
+struct respawn_location getDefenderRespawnPoint() {
 	srand(time(NULL));
         int ran = rand();
         int rand_capped = ran % (defenderRespawnPointCount - 1);  //between 0 respawnPointCount
@@ -198,7 +193,7 @@ struct round_counter getRoundCounter() {
         return round_counter_location[0];
 }
 
-void setCharOnMap(int x, int y, char replacement) {
+void setCharOnMap(char replacement, int x, int y) {
 	list_row[y].content[x] = replacement;
 }
 

@@ -1,3 +1,6 @@
+// Signals
+#define RENDER_FORMAT_STRING "render char%c x%i y%i colora%i colorb%i"
+
 char buffer[8 * 1024];
 char mapName[1024];
 char authorName[1024];
@@ -19,12 +22,7 @@ int attackerRespawnPointCount;
 int defenderRespawnPointCount;
 int wallCount;
 
-struct attacker_respawn_location {
-	int x;
-	int y;
-};
-
-struct defender_respawn_location {
+struct respawn_location {
         int x;
         int y;
 };
@@ -45,8 +43,8 @@ struct round_counter {
 
 struct round_counter round_counter_location[10];
 struct percent_wall percent_wall_location[10];
-struct attacker_respawn_location attacker_respawn_location_list[1024];
-struct defender_respawn_location defender_respawn_location_list[1024];
+struct respawn_location attacker_respawn_location_list[1024];
+struct respawn_location defender_respawn_location_list[1024];
 struct row_t list_row[20];
 
 char* getMap();
@@ -67,15 +65,15 @@ int getDefenderRespawn();
 
 char getCharOnMap(int, int);
 
-struct attacker_respawn_location getAttackerRespawnPoint();
+struct respawn_location getAttackerRespawnPoint();
 
-struct defender_respawn_location getDefenderRespawnPoint();
+struct respawn_location getDefenderRespawnPoint();
 
 struct percent_wall getPercentWall();
 
 struct round_counter getRoundCounter();
 
-void setCharOnMap(int , int , char*);
+void setCharOnMap(char, int, int);
 
 void createColorPair();
 

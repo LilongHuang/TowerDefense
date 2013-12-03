@@ -22,8 +22,6 @@
 #define MILLIS_BETWEEN_UPDATES 500
 #define MAX_MESSAGE_LINES 100
 
-#define RENDER_FORMAT_STRING "render char%c x%i y%i colora%i colorb%i"
-
 #define PLAYER_CHAR 'O'
 
 
@@ -401,6 +399,11 @@ char* try_attacker_move(struct player_t *p, int x, int y) {
 char* shoot(struct player_t* p, int direction) {
   // shoot!
   return NULL;
+}
+
+void respawn(struct player_t* p) {
+  p->x = 3;
+  p->y = 3;
 }
 
 void destroy_bullet(int start) {

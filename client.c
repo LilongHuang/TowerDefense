@@ -200,8 +200,12 @@ void place_players() {
   refresh();
 }
 
-void Moving(char receiveBuffer[1024]) {
-   
+void parse_message(char* message) {
+  // determine what flavor of message
+  // possible message types:
+  // RENDER_FORMAT_STRING: render a character at x,y with colors A and B
+  // "castle %i": update the displayed percentage of castle walls remaining to this
+  refresh();
 }
 
 void control_test() {
@@ -240,6 +244,7 @@ void control_test() {
           ssize_t size = read(sockfd, recvBuff, sizeof recvBuff);
           if (size > 0) {
             mvprintw(30, 0, "Server sent '%s'.\n", recvBuff);
+            parse_message(recvBuff);
 	    for(int i = 0; i < 20; i++) {
 	      mvprintw(i + 1, 0, list_row[i].content);
 	    }	   
