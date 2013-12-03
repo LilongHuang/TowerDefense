@@ -264,6 +264,10 @@ void update_b_team(){
   }
 }
 
+bool is_valid_char(char c) {
+  return true;
+}
+
 void control_test() {
   scrollok(stdscr, 1);       // allow the window to scroll
   noecho();                  // don't echo characters
@@ -281,19 +285,20 @@ void control_test() {
         if ((pfds[0].revents & POLLIN) != 0) {
           // client
           int c = getch();
-          if (c == 80 || c == 112) {
+          /*if (c == 80 || c == 112) {
             printw("Exiting.\n");
             return;
           }
           else if (iscntrl(c))
-            printw("Client pressed '^%c'.\n", c + 64);
-          else {
+            //printw("Client pressed '^%c'.\n", c + 64);
+          else {*/
             //printw("Client pressed '%c'.\n", c);
-	    
+	  if (is_valid_char(c)) {  
             sendBuff[0] = c;
             sendBuff[1] = '\0';
             send_to_server();
           }
+          //}
         }
         if ((pfds[1].revents & POLLIN) != 0) {
           // server

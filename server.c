@@ -309,7 +309,7 @@ int getBackgroundColor(int x, int y) {
 // Lock the bullet array mutex before using this function!
 struct tile_t getTileAt(struct tile_t* t, int x, int y) {
   t->c = ' ';
-  t->fg_color = 1;
+  t->fg_color = 0;
   t->bg_color = getBackgroundColor(x, y);
   
   bool modified = false;
@@ -549,7 +549,7 @@ char* shoot(struct player_t* p, int direction) {
 }
 
 bool isSystemMessage(struct event_t* event) {
-  return event->c == 'U';// || event->c == 'T';
+  return event->c == 'U' || event->c == 'T';
 }
 
 void push_message(const char m, struct player_t* player) {
@@ -794,6 +794,10 @@ char* process_message(struct event_t* event) {
     sprintf(sendBuff, "timer %i", match_timer);
     return sendBuff;
   }
+  else if (c == 'E') {
+    sprintf(sendBuff, "%s", "end");
+    return sendBuff;
+  }
   else if (c == 'F') {
     // Force Rerender
     sprintf(sendBuff, RENDER_FORMAT_STRING, PLAYER_CHAR, p->x, p->y, p->player_color, BACKGROUND_COLOR);
@@ -988,7 +992,20 @@ void* update_thread(void *arg) {
       match_timer--;
       push_message('T', &SYSTEM_PLAYER);
       update_respawns();
-      printf("Tick: %i\n", match_timer);
+      // printf("Tick: %i\n", match_timer);
+      if (match_timer < 0) {
+	if (round_index == 1) {
+	  // begin round two
+	  round_index++;
+	  match_timer = getDefenderWin();
+	  loadMap(mapPath);
+	  push_message('G', &SYSTEM_PLAYER);
+	}
+	else {
+	  // end game
+	  push_message('E', &SYSTEM_PLAYER);
+	}
+      }
       updates_since_last_clock_tick = 0;
     }
     usleep(MICROSECONDS_BETWEEN_UPDATES);
